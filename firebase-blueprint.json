@@ -1,0 +1,167 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User profile with study stats, tickets, and customization settings",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the user",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name of the coworker",
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user",
+          "maxLength": 120
+        },
+        "tickets": {
+          "type": "number",
+          "description": "Earned cafe tickets"
+        },
+        "totalMinutesFocused": {
+          "type": "number",
+          "description": "Total focused study minutes"
+        },
+        "currentActivity": {
+          "type": "string",
+          "description": "Current status activity string",
+          "maxLength": 80
+        },
+        "avatarConfigJson": {
+          "type": "string",
+          "description": "Serialized JSON string of the user avatar configuration",
+          "maxLength": 2048
+        },
+        "deskConfigJson": {
+          "type": "string",
+          "description": "Serialized JSON string of desk workstation accessories",
+          "maxLength": 2048
+        },
+        "unlockedItemsJson": {
+          "type": "string",
+          "description": "Serialized JSON string of unlocked shop items",
+          "maxLength": 4096
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp or server timestamp when the user profile was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp or server timestamp when the user profile was last updated"
+        }
+      },
+      "required": ["userId", "displayName", "tickets", "totalMinutesFocused"]
+    },
+    "BookshelfItem": {
+      "title": "Bookshelf Item",
+      "description": "Books saved, marked as reading or completed, along with reader notes and bookmarks",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the owner",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "bookId": {
+          "type": "number",
+          "description": "Project Gutenberg book ID number"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the book",
+          "maxLength": 150
+        },
+        "author": {
+          "type": "string",
+          "description": "Author of the book",
+          "maxLength": 100
+        },
+        "category": {
+          "type": "string",
+          "description": "Genre or category of the book",
+          "maxLength": 80
+        },
+        "status": {
+          "type": "string",
+          "description": "Reading progress status",
+          "enum": ["want_to_read", "reading", "completed"],
+          "maxLength": 20
+        },
+        "notes": {
+          "type": "string",
+          "description": "Personal reader notes, favorite quotes, or study thoughts",
+          "maxLength": 2000
+        },
+        "claimedBonus": {
+          "type": "boolean",
+          "description": "Whether completion bonus tickets were claimed"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when this bookshelf entry was updated"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when this bookshelf entry was created"
+        }
+      },
+      "required": ["userId", "bookId", "title", "author", "status"]
+    },
+    "CafeSharedNote": {
+      "title": "Cafe Shared Note",
+      "description": "Public sticky notes and book recommendations on the cafe community board",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Auth UID of the author",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of the author",
+          "maxLength": 80
+        },
+        "text": {
+          "type": "string",
+          "description": "Text content of the note",
+          "maxLength": 500
+        },
+        "category": {
+          "type": "string",
+          "description": "Category tag for the recommendation or thought",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when this note was posted"
+        }
+      },
+      "required": ["userId", "authorName", "text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Stores user profile, tickets, focus stats, and customization"
+    },
+    "/users/{userId}/books/{bookId}": {
+      "schema": "BookshelfItem",
+      "description": "Stores personal bookshelf items, reading status, bookmarks, and notes"
+    },
+    "/cafe_notes/{noteId}": {
+      "schema": "CafeSharedNote",
+      "description": "Stores public sticky notes and book recommendations left by coworkers"
+    }
+  }
+}

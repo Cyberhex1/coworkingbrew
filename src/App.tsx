@@ -35,6 +35,7 @@ import { BreakMiniGames } from './components/BreakMiniGames';
 import { AmbientSoundMixer } from './components/AmbientSoundMixer';
 import { StatisticsModal } from './components/StatisticsModal';
 import { RoomLobbyModal } from './components/RoomLobbyModal';
+import { BookshelfModal } from './components/BookshelfModal';
 import { DisplayModeBar } from './components/DisplayModeBar';
 import { StickerWidget } from './components/StickerWidget';
 import { DockedSidebar } from './components/DockedSidebar';
@@ -194,6 +195,7 @@ export default function App() {
   const [isMixerOpen, setIsMixerOpen] = useState(false);
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isLobbyOpen, setIsLobbyOpen] = useState(false);
+  const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
 
   // --- LocalStorage Synchronization ---
   useEffect(() => {
@@ -552,6 +554,14 @@ export default function App() {
             <span>Exit Zen</span>
           </button>
           <button
+            onClick={() => setIsLobbyOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-purple-950/80 backdrop-blur-md border border-purple-500/40 text-purple-200 hover:text-white text-xs font-cozy font-semibold shadow-lg transition-all"
+            title="Step into Hallway & Room Wall"
+          >
+            <span>🚪</span>
+            <span>Hallway</span>
+          </button>
+          <button
             onClick={() => setIsMixerOpen(true)}
             className="p-2 rounded-full bg-purple-950/80 backdrop-blur-md border border-purple-500/40 text-purple-200 hover:text-white transition-all shadow-lg"
           >
@@ -691,6 +701,8 @@ export default function App() {
           onPeerPetClick={() => handlePetInteraction()}
           onOpenCustomizer={() => setIsCustomizerOpen(true)}
           onOpenBreakGames={() => setIsBreakGamesOpen(true)}
+          onOpenBookshelf={() => setIsBookshelfOpen(true)}
+          onOpenHallway={() => setIsLobbyOpen(true)}
           tasks={tasks}
           timeBlocks={timeBlocks}
           onAddTask={handleAddTask}
@@ -840,6 +852,11 @@ export default function App() {
         onCreateRoom={(newRoom) => {
           setCurrentRoom(newRoom);
         }}
+      />
+
+      <BookshelfModal
+        isOpen={isBookshelfOpen}
+        onClose={() => setIsBookshelfOpen(false)}
       />
     </div>
   );

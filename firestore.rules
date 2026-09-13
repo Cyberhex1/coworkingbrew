@@ -1,0 +1,92 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation for UserProfile
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 80 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+             data.tickets is number && data.tickets >= 0 &&
+             data.totalMinutesFocused is number && data.totalMinutesFocused >= 0 &&
+             (!('currentActivity' in data) || (data.currentActivity is string && data.currentActivity.size() <= 80)) &&
+             (!('avatarConfigJson' in data) || (data.avatarConfigJson is string && data.avatarConfigJson.size() <= 2048)) &&
+             (!('deskConfigJson' in data) || (data.deskConfigJson is string && data.deskConfigJson.size() <= 2048)) &&
+             (!('unlockedItemsJson' in data) || (data.unlockedItemsJson is string && data.unlockedItemsJson.size() <= 4096));
+    }
+
+    // Validation for BookshelfItem
+    function isValidBookshelfItem(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.bookId is number &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+             data.author is string && data.author.size() > 0 && data.author.size() <= 100 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 80)) &&
+             data.status in ['want_to_read', 'reading', 'completed'] &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 2000)) &&
+             (!('claimedBonus' in data) || data.claimedBonus is bool);
+    }
+
+    // Validation for CafeSharedNote
+    function isValidCafeSharedNote(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.authorName is string && data.authorName.size() > 0 && data.authorName.size() <= 80 &&
+             data.text is string && data.text.size() > 0 && data.text.size() <= 500 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50));
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming()) &&
+                    incoming().userId == existing().userId;
+      allow delete: if isOwner(userId);
+
+      // Bookshelf personal books
+      match /books/{bookId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(bookId) && isValidBookshelfItem(incoming());
+        allow update: if isOwner(userId) && isValidId(bookId) && isValidBookshelfItem(incoming()) &&
+                      incoming().userId == existing().userId &&
+                      incoming().bookId == existing().bookId;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    // Shared Cafe Community Notes / Bookshelf Recommendations
+    match /cafe_notes/{noteId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(noteId) && isValidCafeSharedNote(incoming());
+      allow update: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid &&
+                    isValidCafeSharedNote(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid;
+    }
+  }
+}

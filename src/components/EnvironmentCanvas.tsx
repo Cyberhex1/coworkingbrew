@@ -20,6 +20,8 @@ interface EnvironmentCanvasProps {
   onPeerPetClick: (peerId: string) => void;
   onOpenCustomizer: () => void;
   onOpenBreakGames?: () => void;
+  onOpenBookshelf?: () => void;
+  onOpenHallway?: () => void;
   tasks?: TaskItem[];
   timeBlocks?: TimeBlock[];
   onAddTask?: (title: string, category: 'work' | 'study' | 'creative' | 'chores', pomodoros: number) => void;
@@ -46,6 +48,8 @@ export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
   onPeerPetClick,
   onOpenCustomizer,
   onOpenBreakGames,
+  onOpenBookshelf,
+  onOpenHallway,
   tasks = [],
   timeBlocks = [],
   onAddTask,
@@ -79,6 +83,8 @@ export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
           onPeerPetClick={() => onPeerPetClick(userPeer.id)}
           onOpenCustomizer={onOpenCustomizer}
           onOpenBreakGames={onOpenBreakGames}
+          onOpenBookshelf={onOpenBookshelf}
+          onOpenHallway={onOpenHallway}
           tasks={tasks}
           timeBlocks={timeBlocks}
           onAddTask={onAddTask}

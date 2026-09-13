@@ -55,6 +55,8 @@ interface Pixel3DWorldProps {
   onPeerPetClick: () => void;
   onOpenCustomizer: () => void;
   onOpenBreakGames?: () => void;
+  onOpenBookshelf?: () => void;
+  onOpenHallway?: () => void;
   tasks?: TaskItem[];
   timeBlocks?: TimeBlock[];
   onAddTask?: (title: string, category: 'work' | 'study' | 'creative' | 'chores', pomodoros: number) => void;
@@ -82,6 +84,8 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   onPeerPetClick,
   onOpenCustomizer,
   onOpenBreakGames,
+  onOpenBookshelf,
+  onOpenHallway,
   tasks = [],
   timeBlocks = [],
   onAddTask,
@@ -164,6 +168,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   const pixelScaleRef = useRef<number>(pixelScale);
   const pomodoroModeRef = useRef<PomodoroMode>(pomodoroMode);
   const isTimerRunningRef = useRef<boolean>(isTimerRunning);
+  const doorCooldownRef = useRef<boolean>(false);
 
   // Helper notification toaster
   const showOfficeNotice = (msg: string) => {
@@ -174,6 +179,12 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   };
 
   // Office Interactive Station Handlers (Hoisted so animation loop can invoke them!)
+  const handleOpenHallway = () => {
+    soundEngine.playChime('bell');
+    showOfficeNotice('Stepped into the Hallway corridor... 🚪');
+    onOpenHallway?.();
+  };
+
   const handleCoffeeBarClick = () => {
     soundEngine.playChime('chime');
     setIsEspressoOpen(true);
@@ -192,6 +203,11 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   const handleSprintBoardClick = () => {
     soundEngine.playChime('chime');
     setIsSprintBoardOpen(true);
+  };
+
+  const handleBookshelfClick = () => {
+    soundEngine.playChime('chime');
+    onOpenBookshelf?.();
   };
 
   const handleReturnToDesk = () => {
@@ -416,7 +432,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           const moveZ = (dz - dx) * 0.7071;
 
           userPosRef.current.x = Math.max(-9.0, Math.min(9.0, userPosRef.current.x + moveX));
-          userPosRef.current.z = Math.max(-8.0, Math.min(8.0, userPosRef.current.z + moveZ));
+          userPosRef.current.z = Math.max(-8.0, Math.min(8.2, userPosRef.current.z + moveZ));
 
           userGroupRef.current.position.x = userPosRef.current.x;
           userGroupRef.current.position.z = userPosRef.current.z;
@@ -424,6 +440,19 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           // Rotate facing direction
           const targetAngle = Math.atan2(moveX, moveZ);
           userGroupRef.current.rotation.y = targetAngle;
+
+          // Walking Out Door Threshold Trigger (Door is at x: 5.5..8.0, z >= 7.5)
+          if (userPosRef.current.x >= 5.2 && userPosRef.current.z >= 7.5) {
+            if (!doorCooldownRef.current) {
+              doorCooldownRef.current = true;
+              userPosRef.current.z = 6.6;
+              userGroupRef.current.position.z = 6.6;
+              handleOpenHallway();
+              setTimeout(() => {
+                doorCooldownRef.current = false;
+              }, 2500);
+            }
+          }
         }
 
         // Update User animation
@@ -493,7 +522,25 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           },
         };
       }
-      // 2. Espresso Bar (x: -8.8, z: -4.2)
+      // 2. Blackboard & Room Directory (x: -4.2, z: -8.8)
+      else if (Math.hypot(uX - (-4.2), uZ - (-8.8)) < 3.2) {
+        detectedTrigger = {
+          id: 'blackboard',
+          label: 'Open Hallway & Room Wall',
+          icon: '🚪',
+          action: handleOpenHallway,
+        };
+      }
+      // 3. Exit Door to Hallway Corridor (x: 6.8, z: 8.2)
+      else if (Math.hypot(uX - 6.8, uZ - 8.2) < 3.4) {
+        detectedTrigger = {
+          id: 'exit_door',
+          label: 'Walk into Hallway (Room Wall)',
+          icon: '🚪',
+          action: handleOpenHallway,
+        };
+      }
+      // 4. Espresso Bar (x: -8.8, z: -4.2)
       else if (Math.hypot(uX - (-8.8), uZ - (-4.2)) < 3.2) {
         detectedTrigger = {
           id: 'espresso',
@@ -502,7 +549,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleCoffeeBarClick,
         };
       }
-      // 3. Water Cooler (x: -8.9, z: -0.6)
+      // 5. Water Cooler (x: -8.9, z: -0.6)
       else if (Math.hypot(uX - (-8.9), uZ - (-0.6)) < 3.0) {
         detectedTrigger = {
           id: 'cooler',
@@ -511,7 +558,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleWaterCoolerClick,
         };
       }
-      // 4. Copier / Print Station (x: -8.7, z: 2.4)
+      // 6. Copier / Print Station (x: -8.7, z: 2.4)
       else if (Math.hypot(uX - (-8.7), uZ - 2.4) < 3.0) {
         detectedTrigger = {
           id: 'copier',
@@ -520,16 +567,16 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handlePrinterStationClick,
         };
       }
-      // 5. Agile Sprint Board (x: -4.2, z: -8.8)
-      else if (Math.hypot(uX - (-4.2), uZ - (-8.8)) < 3.2) {
+      // 7. Gutenberg Bookshelf & Archive (x: -8.8, z: 4.8)
+      else if (Math.hypot(uX - (-8.8), uZ - 4.8) < 3.2) {
         detectedTrigger = {
-          id: 'sprint_board',
-          label: 'Open Sprint Board',
-          icon: '📋',
-          action: handleSprintBoardClick,
+          id: 'bookshelf',
+          label: 'Browse Gutenberg Bookshelf',
+          icon: '📚',
+          action: handleBookshelfClick,
         };
       }
-      // 6. Break Games / Basketball Hoop (x: 3.8, z: 3.8)
+      // 8. Break Games / Basketball Hoop (x: 3.8, z: 3.8)
       else if (Math.hypot(uX - 3.8, uZ - 3.8) < 3.0) {
         detectedTrigger = {
           id: 'break_games',
@@ -538,7 +585,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: () => onOpenBreakGames?.(),
         };
       }
-      // 7. User Desk Workstation (when walking and near own desk)
+      // 9. User Desk Workstation (when walking and near own desk)
       else if (Math.hypot(uX - deskLocations[0].x, uZ - (deskLocations[0].z - 0.42)) < 2.5) {
         detectedTrigger = {
           id: 'user_desk',
@@ -547,7 +594,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleReturnToDesk,
         };
       }
-      // 8. Peer Desks: high-five coworker when visiting their cubicle!
+      // 10. Peer Desks: high-five coworker when visiting their cubicle!
       else {
         for (let pIdx = 0; pIdx < peers.length; pIdx++) {
           const peer = peers[pIdx];
@@ -813,6 +860,14 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
       for (const hit of intersects) {
         let cur: THREE.Object3D | null = hit.object;
         while (cur) {
+          if (cur.userData?.hotspot === 'blackboard' || cur.name === 'hotspot_blackboard') {
+            handleOpenHallway();
+            return;
+          }
+          if (cur.userData?.hotspot === 'exit_door' || cur.name === 'hotspot_exit_door') {
+            handleOpenHallway();
+            return;
+          }
           if (cur.userData?.hotspot === 'espresso' || cur.name === 'hotspot_espresso') {
             handleCoffeeBarClick();
             return;
@@ -826,7 +881,11 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
             return;
           }
           if (cur.userData?.hotspot === 'sprint_board' || cur.name === 'hotspot_sprint_board') {
-            handleSprintBoardClick();
+            handleOpenHallway();
+            return;
+          }
+          if (cur.userData?.hotspot === 'bookshelf' || cur.name === 'hotspot_bookshelf') {
+            handleBookshelfClick();
             return;
           }
           cur = cur.parent;
@@ -995,8 +1054,26 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
         </div>
       </div>
 
-      {/* 4. Quick Office Hotspots Toolbar (Espresso, Water Cooler, Printer, Board, Mini-Games) */}
+      {/* 4. Quick Office Hotspots Toolbar (Hallway, Blackboard, Espresso, Water Cooler, Printer, Mini-Games) */}
       <div className="absolute top-16 left-4 flex flex-col gap-2 pointer-events-none">
+        <button
+          onClick={handleOpenHallway}
+          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-900/90 to-indigo-900/90 backdrop-blur-md hover:from-purple-800 hover:to-indigo-800 border border-purple-400/50 text-purple-100 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95 animate-pulse"
+          title="Step into the Hallway & Room Wall Directory"
+        >
+          <span>🚪</span>
+          <span className="hidden sm:inline">Hallway (Room Wall)</span>
+        </button>
+
+        <button
+          onClick={handleOpenHallway}
+          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
+          title="Check Blackboard & Room Wall"
+        >
+          <span>📋</span>
+          <span className="hidden sm:inline">Blackboard</span>
+        </button>
+
         <button
           onClick={handleCoffeeBarClick}
           className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
@@ -1024,14 +1101,16 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           <span className="hidden sm:inline">Copier Hub</span>
         </button>
 
-        <button
-          onClick={handleSprintBoardClick}
-          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
-          title="Check Agile Sprint Board"
-        >
-          <span>📋</span>
-          <span className="hidden sm:inline">Sprint Board</span>
-        </button>
+        {onOpenBookshelf && (
+          <button
+            onClick={onOpenBookshelf}
+            className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-amber-900/80 border border-amber-500/40 text-amber-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
+            title="Browse Gutenberg Bookshelf & Classics"
+          >
+            <span>📚</span>
+            <span className="hidden sm:inline">Bookshelf</span>
+          </button>
+        )}
 
         {onOpenBreakGames && (
           <button

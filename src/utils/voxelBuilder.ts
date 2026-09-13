@@ -903,62 +903,81 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   mullionH.position.set(2.5, 2.8, -roomDepth / 2 + 0.18);
   roomGroup.add(windowFrame, windowGlass, mullionV1, mullionV2, mullionH);
 
-  // 4. Agile Sprint & Kanban Board on Back Wall
-  const sprintBoardGroup = new THREE.Group();
-  sprintBoardGroup.name = 'hotspot_sprint_board';
-  sprintBoardGroup.userData = { hotspot: 'sprint_board' };
-  sprintBoardGroup.position.set(-4.2, 2.8, -roomDepth / 2 + 0.2);
+  // 4. Blackboard / Room Directory & Sprint Board on Back Wall
+  const blackboardGroup = new THREE.Group();
+  blackboardGroup.name = 'hotspot_blackboard';
+  blackboardGroup.userData = { hotspot: 'blackboard' };
+  blackboardGroup.position.set(-4.2, 2.8, -roomDepth / 2 + 0.2);
 
-  const boardFrame = createVoxelBox(4.2, 2.4, 0.08, '#334155');
-  const boardFace = createVoxelBox(4.0, 2.2, 0.06, '#ffffff');
+  const boardFrame = createVoxelBox(4.4, 2.5, 0.1, '#78350f', { roughness: 0.7 }); // Rich warm wood frame
+  const boardFace = createVoxelBox(4.2, 2.3, 0.06, '#182420', { roughness: 0.95 }); // Deep slate-green chalkboard
   boardFace.position.set(0, 0, 0.02);
 
-  // Kanban Column Dividers
-  const col1 = createVoxelBox(0.04, 1.9, 0.02, '#cbd5e1');
-  col1.position.set(-1.0, -0.05, 0.06);
-  const col2 = createVoxelBox(0.04, 1.9, 0.02, '#cbd5e1');
-  col2.position.set(0.3, -0.05, 0.06);
-  const col3 = createVoxelBox(0.04, 1.9, 0.02, '#cbd5e1');
-  col3.position.set(1.4, -0.05, 0.06);
+  // Top Blackboard Header: "ROOM DIRECTORY & HALLWAY"
+  const boardTitleBar = createVoxelBox(3.8, 0.28, 0.02, '#1e293b');
+  boardTitleBar.position.set(0, 0.92, 0.05);
 
-  // Header badges (Backlog, Doing, Review, Done)
-  const hBadge1 = createVoxelBox(0.8, 0.18, 0.02, '#94a3b8');
-  hBadge1.position.set(-1.5, 0.9, 0.06);
-  const hBadge2 = createVoxelBox(0.8, 0.18, 0.02, '#0284c7');
-  hBadge2.position.set(-0.35, 0.9, 0.06);
-  const hBadge3 = createVoxelBox(0.8, 0.18, 0.02, '#d97706');
-  hBadge3.position.set(0.85, 0.9, 0.06);
-  const hBadge4 = createVoxelBox(0.8, 0.18, 0.02, '#16a34a');
-  hBadge4.position.set(1.8, 0.9, 0.06);
+  // Chalk written room category badges on the blackboard
+  const chalkBadge1 = createVoxelBox(0.85, 0.16, 0.02, '#38bdf8'); // Offices
+  chalkBadge1.position.set(-1.45, 0.65, 0.06);
+  const chalkBadge2 = createVoxelBox(0.85, 0.16, 0.02, '#4ade80'); // Tea & Cafes
+  chalkBadge2.position.set(-0.45, 0.65, 0.06);
+  const chalkBadge3 = createVoxelBox(0.85, 0.16, 0.02, '#fbbf24'); // Nature Lofts
+  chalkBadge3.position.set(0.55, 0.65, 0.06);
+  const chalkBadge4 = createVoxelBox(0.85, 0.16, 0.02, '#f472b6'); // Night Dens
+  chalkBadge4.position.set(1.55, 0.65, 0.06);
 
-  sprintBoardGroup.add(boardFrame, boardFace, col1, col2, col3, hBadge1, hBadge2, hBadge3, hBadge4);
+  // Chalk lines & drawings on the blackboard
+  const chalkLine1 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
+  chalkLine1.position.set(-0.95, -0.15, 0.06);
+  const chalkLine2 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
+  chalkLine2.position.set(0.05, -0.15, 0.06);
+  const chalkLine3 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
+  chalkLine3.position.set(1.05, -0.15, 0.06);
 
-  // Sticky Notes in Kanban columns
-  const stickyColors = ['#facc15', '#f472b6', '#38bdf8', '#4ade80', '#fb923c'];
+  // Chalk room notes & sticky cards on the blackboard
+  const stickyColors = ['#facc15', '#f472b6', '#38bdf8', '#4ade80', '#fb923c', '#e2e8f0'];
   const stickyCoords = [
-    [-1.6, 0.6], [-1.4, 0.2], [-1.6, -0.2], [-1.3, -0.6],
-    [-0.5, 0.6], [-0.2, 0.3], [-0.5, -0.1],
-    [0.7, 0.5], [1.0, 0.1],
-    [1.7, 0.6], [1.9, 0.2], [1.7, -0.3],
+    [-1.5, 0.3], [-1.35, -0.1], [-1.55, -0.5],
+    [-0.5, 0.35], [-0.35, -0.05], [-0.55, -0.45],
+    [0.5, 0.3], [0.65, -0.1], [0.45, -0.5],
+    [1.5, 0.35], [1.65, -0.05], [1.45, -0.45],
   ];
   stickyCoords.forEach(([sx, sy], sIdx) => {
-    const st = createVoxelBox(0.24, 0.24, 0.02, stickyColors[sIdx % stickyColors.length]);
+    const st = createVoxelBox(0.24, 0.22, 0.02, stickyColors[sIdx % stickyColors.length]);
     st.position.set(sx, sy, 0.06);
-    sprintBoardGroup.add(st);
+    blackboardGroup.add(st);
   });
 
-  // Aluminum marker tray with dry erase markers
-  const markerTray = createVoxelBox(3.6, 0.06, 0.12, '#94a3b8', { metalness: 0.8 });
-  markerTray.position.set(0, -1.15, 0.08);
-  const markerRed = createVoxelBox(0.18, 0.03, 0.03, '#ef4444');
-  markerRed.position.set(-0.6, -1.1, 0.08);
-  const markerBlue = createVoxelBox(0.18, 0.03, 0.03, '#3b82f6');
-  markerBlue.position.set(-0.3, -1.1, 0.08);
-  const eraser = createVoxelBox(0.25, 0.05, 0.08, '#1e293b');
-  eraser.position.set(0.3, -1.1, 0.08);
-  sprintBoardGroup.add(markerTray, markerRed, markerBlue, eraser);
+  blackboardGroup.add(
+    boardFrame,
+    boardFace,
+    boardTitleBar,
+    chalkBadge1,
+    chalkBadge2,
+    chalkBadge3,
+    chalkBadge4,
+    chalkLine1,
+    chalkLine2,
+    chalkLine3
+  );
 
-  roomGroup.add(sprintBoardGroup);
+  // Wooden chalk tray with colorful chalk sticks and felt eraser
+  const chalkTray = createVoxelBox(3.8, 0.08, 0.14, '#78350f', { roughness: 0.7 });
+  chalkTray.position.set(0, -1.18, 0.08);
+  const chalkWhite = createVoxelBox(0.14, 0.04, 0.04, '#ffffff');
+  chalkWhite.position.set(-0.7, -1.12, 0.08);
+  const chalkYellow = createVoxelBox(0.14, 0.04, 0.04, '#facc15');
+  chalkYellow.position.set(-0.45, -1.12, 0.08);
+  const chalkCyan = createVoxelBox(0.14, 0.04, 0.04, '#38bdf8');
+  chalkCyan.position.set(-0.2, -1.12, 0.08);
+  const chalkPink = createVoxelBox(0.14, 0.04, 0.04, '#f472b6');
+  chalkPink.position.set(0.05, -1.12, 0.08);
+  const feltEraser = createVoxelBox(0.28, 0.06, 0.09, '#334155');
+  feltEraser.position.set(0.45, -1.12, 0.08);
+  blackboardGroup.add(chalkTray, chalkWhite, chalkYellow, chalkCyan, chalkPink, feltEraser);
+
+  roomGroup.add(blackboardGroup);
 
   // 5. World Time Zone Clocks (SF, NYC, LON, TYO)
   const clockGroup = new THREE.Group();
@@ -1216,6 +1235,85 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   cubicleGroup.add(spineDivider);
 
   roomGroup.add(cubicleGroup);
+
+  // 14. Exit Door to Hallway Corridor (Front-Right Corner Entrance)
+  const exitDoorGroup = new THREE.Group();
+  exitDoorGroup.name = 'hotspot_exit_door';
+  exitDoorGroup.userData = { hotspot: 'exit_door' };
+  exitDoorGroup.position.set(6.8, 0, 8.2);
+
+  // Sturdy Architectural Wood Door Frame
+  const doorFrameL = createVoxelBox(0.2, 3.8, 0.25, '#334155');
+  doorFrameL.position.set(-1.05, 1.9, 0);
+  const doorFrameR = createVoxelBox(0.2, 3.8, 0.25, '#334155');
+  doorFrameR.position.set(1.05, 1.9, 0);
+  const doorFrameT = createVoxelBox(2.3, 0.25, 0.25, '#334155');
+  doorFrameT.position.set(0, 3.8, 0);
+  const doorThreshold = createVoxelBox(2.3, 0.06, 0.35, '#64748b');
+  doorThreshold.position.set(0, 0.03, 0);
+
+  // Illuminated Glowing Green "EXIT / HALLWAY" Overhead Sign
+  const exitSignHousing = createVoxelBox(1.3, 0.42, 0.14, '#14532d', {
+    emissive: '#16a34a',
+    emissiveIntensity: 0.9,
+  });
+  exitSignHousing.position.set(0, 4.15, 0.05);
+  const exitSignGlow = createVoxelBox(1.1, 0.28, 0.04, '#ffffff', {
+    emissive: '#22c55e',
+    emissiveIntensity: 1.2,
+  });
+  exitSignGlow.position.set(0, 4.15, 0.13);
+
+  // Warm Walnut Wood Door Panel (Slightly ajar inviting user into the hallway)
+  const doorPanel = new THREE.Group();
+  doorPanel.position.set(-0.95, 0, 0);
+  doorPanel.rotation.y = -0.35; // Ajar opening outward toward hallway
+
+  const doorWood = createVoxelBox(1.85, 3.5, 0.1, '#78350f', { roughness: 0.6 });
+  doorWood.position.set(0.925, 1.75, 0);
+
+  // Frosted Glass Window Inset with warm hallway light glow
+  const doorGlass = createVoxelBox(0.7, 1.4, 0.12, '#fef08a', {
+    emissive: '#fde047',
+    emissiveIntensity: 0.75,
+    transparent: true,
+    opacity: 0.9,
+  });
+  doorGlass.position.set(0.925, 2.3, 0);
+
+  // Polished Brass Door Handle & Lock Plate
+  const doorKnob = createVoxelBox(0.12, 0.18, 0.18, '#facc15', { metalness: 0.9, roughness: 0.2 });
+  doorKnob.position.set(1.65, 1.6, 0.06);
+
+  doorPanel.add(doorWood, doorGlass, doorKnob);
+
+  // Welcome Doormat in front of the door
+  const welcomeMat = createVoxelBox(2.2, 0.04, 1.3, '#1e293b', { roughness: 0.9 });
+  welcomeMat.position.set(0, 0.02, -0.7);
+  const matStripe = createVoxelBox(1.8, 0.05, 0.08, '#f59e0b');
+  matStripe.position.set(0, 0.03, -0.7);
+
+  // Warm Hallway Sconce Light on the doorpost
+  const doorSconce = createVoxelBox(0.18, 0.35, 0.18, '#f59e0b', {
+    emissive: '#f59e0b',
+    emissiveIntensity: 1.0,
+  });
+  doorSconce.position.set(-1.25, 2.5, 0.08);
+
+  exitDoorGroup.add(
+    doorFrameL,
+    doorFrameR,
+    doorFrameT,
+    doorThreshold,
+    exitSignHousing,
+    exitSignGlow,
+    doorPanel,
+    welcomeMat,
+    matStripe,
+    doorSconce
+  );
+
+  roomGroup.add(exitDoorGroup);
 
   // -------------------------------------------------------------
   // Office Lighting Setup: Crisp, Bright, Beautiful Studio Fill

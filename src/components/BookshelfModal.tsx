@@ -1,7 +1,40 @@
-import React, { useState } from 'react';
-import { BookOpen, ExternalLink, X, Search, Bookmark, Sparkles, Check, ChevronLeft, ChevronRight, Type, Palette } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  BookOpen,
+  ExternalLink,
+  X,
+  Search,
+  Bookmark,
+  BookmarkCheck,
+  Sparkles,
+  Check,
+  ChevronLeft,
+  Type,
+  Palette,
+  StickyNote,
+  Library,
+  BookMarked,
+  MessageSquarePlus,
+  Send,
+  User as UserIcon,
+  Cloud,
+  CheckCircle2,
+} from 'lucide-react';
 import { soundEngine } from '../utils/audioSynth';
 import confetti from 'canvas-confetti';
+import { User } from 'firebase/auth';
+import {
+  saveBookToBookshelf,
+  loadUserBookshelf,
+  removeBookFromBookshelf,
+  addCafeSharedNote,
+  db,
+  FirebaseBookshelfBook,
+  FirebaseCafeNote,
+  handleFirestoreError,
+  OperationType,
+} from '../firebase';
+import { collection, onSnapshot, query, limit, orderBy } from 'firebase/firestore';
 
 export interface GutenbergBook {
   id: number;
@@ -243,18 +276,89 @@ interface BookshelfModalProps {
   isOpen: boolean;
   onClose: () => void;
   onEarnTickets?: (amount: number) => void;
+  currentUser: User | null;
+  onOpenAuth?: () => void;
 }
 
 export const BookshelfModal: React.FC<BookshelfModalProps> = ({
   isOpen,
   onClose,
   onEarnTickets,
+  currentUser,
+  onOpenAuth,
 }) => {
+  const [activeTab, setActiveTab] = useState<'catalog' | 'my_shelf' | 'community'>('catalog');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBook, setSelectedBook] = useState<GutenbergBook | null>(null);
   const [readerFontSize, setReaderFontSize] = useState<'sm' | 'base' | 'lg'>('base');
   const [readerTheme, setReaderTheme] = useState<'dark' | 'sepia' | 'light'>('dark');
-  const [finishedBonusClaimed, setFinishedBonusClaimed] = useState<Record<number, boolean>>({});
+
+  // Personal Bookshelf state
+  const [savedBooks, setSavedBooks] = useState<Record<number, FirebaseBookshelfBook>>(() => {
+    const local = localStorage.getItem('ontogether_saved_books');
+    return local ? JSON.parse(local) : {};
+  });
+
+  // Active Reader note editing
+  const [currentBookNote, setCurrentBookNote] = useState('');
+  const [currentBookStatus, setCurrentBookStatus] = useState<'want_to_read' | 'reading' | 'completed'>('reading');
+
+  // Community sticky notes
+  const [communityNotes, setCommunityNotes] = useState<FirebaseCafeNote[]>([]);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [newNoteCategory, setNewNoteCategory] = useState('Recommendation');
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+
+  // Load user's books from Firestore if logged in
+  useEffect(() => {
+    if (!currentUser) return;
+    const fetchBooks = async () => {
+      try {
+        const books = await loadUserBookshelf(currentUser.uid);
+        const map: Record<number, FirebaseBookshelfBook> = {};
+        books.forEach((b) => {
+          map[b.bookId] = b;
+        });
+        setSavedBooks(map);
+        localStorage.setItem('ontogether_saved_books', JSON.stringify(map));
+      } catch (err) {
+        console.warn('Could not load Firestore books:', err);
+      }
+    };
+    fetchBooks();
+  }, [currentUser]);
+
+  // Subscribe to community cafe notes from Firestore
+  useEffect(() => {
+    if (!isOpen) return;
+    const notesCol = collection(db, 'cafe_notes');
+    const unsub = onSnapshot(
+      notesCol,
+      (snapshot) => {
+        const notes = snapshot.docs.map((d) => d.data() as FirebaseCafeNote);
+        notes.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setCommunityNotes(notes);
+      },
+      (err) => {
+        handleFirestoreError(err, OperationType.GET, 'cafe_notes');
+      }
+    );
+    return () => unsub();
+  }, [isOpen]);
+
+  // Sync reader state when book selected
+  useEffect(() => {
+    if (selectedBook) {
+      const existing = savedBooks[selectedBook.id];
+      if (existing) {
+        setCurrentBookNote(existing.notes || '');
+        setCurrentBookStatus(existing.status);
+      } else {
+        setCurrentBookNote('');
+        setCurrentBookStatus('reading');
+      }
+    }
+  }, [selectedBook, savedBooks]);
 
   if (!isOpen) return null;
 
@@ -264,38 +368,147 @@ export const BookshelfModal: React.FC<BookshelfModalProps> = ({
     b.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleClaimFinishedChapter = (bookId: number) => {
-    if (finishedBonusClaimed[bookId]) return;
-    setFinishedBonusClaimed((prev) => ({ ...prev, [bookId]: true }));
+  const myShelfBooks = GUTENBERG_POPULAR_BOOKS.filter((b) => savedBooks[b.id]);
+
+  const handleSaveToShelf = async (book: GutenbergBook, status: 'want_to_read' | 'reading' | 'completed', notes = '') => {
+    const entry: FirebaseBookshelfBook = {
+      userId: currentUser?.uid || 'guest-user',
+      bookId: book.id,
+      title: book.title,
+      author: book.author,
+      category: book.category,
+      status,
+      notes,
+      claimedBonus: savedBooks[book.id]?.claimedBonus || false,
+    };
+
+    const updated = { ...savedBooks, [book.id]: entry };
+    setSavedBooks(updated);
+    localStorage.setItem('ontogether_saved_books', JSON.stringify(updated));
     soundEngine.playCoin();
-    confetti({ particleCount: 30, spread: 50 });
+
+    if (currentUser) {
+      try {
+        await saveBookToBookshelf(entry);
+      } catch (err) {
+        console.error('Failed to sync book to Firestore:', err);
+      }
+    }
+  };
+
+  const handleRemoveFromShelf = async (bookId: number) => {
+    const updated = { ...savedBooks };
+    delete updated[bookId];
+    setSavedBooks(updated);
+    localStorage.setItem('ontogether_saved_books', JSON.stringify(updated));
+    soundEngine.playChime('chime');
+
+    if (currentUser) {
+      try {
+        await removeBookFromBookshelf(currentUser.uid, bookId);
+      } catch (err) {
+        console.error('Failed to remove book from Firestore:', err);
+      }
+    }
+  };
+
+  const handleClaimFinishedChapter = async (bookId: number) => {
+    const existing = savedBooks[bookId];
+    if (existing?.claimedBonus) return;
+
+    soundEngine.playCoin();
+    confetti({ particleCount: 35, spread: 60 });
     if (onEarnTickets) onEarnTickets(10);
+
+    const targetBook = GUTENBERG_POPULAR_BOOKS.find((b) => b.id === bookId);
+    if (!targetBook) return;
+
+    const entry: FirebaseBookshelfBook = {
+      userId: currentUser?.uid || 'guest-user',
+      bookId,
+      title: targetBook.title,
+      author: targetBook.author,
+      category: targetBook.category,
+      status: 'completed',
+      notes: currentBookNote,
+      claimedBonus: true,
+    };
+
+    const updated = { ...savedBooks, [bookId]: entry };
+    setSavedBooks(updated);
+    localStorage.setItem('ontogether_saved_books', JSON.stringify(updated));
+
+    if (currentUser) {
+      try {
+        await saveBookToBookshelf(entry);
+      } catch (err) {
+        console.error('Failed to sync finished book:', err);
+      }
+    }
+  };
+
+  const handlePostCommunityNote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNoteText.trim()) return;
+
+    setIsSubmittingNote(true);
+    try {
+      await addCafeSharedNote({
+        userId: currentUser?.uid || 'coworker',
+        authorName: currentUser?.displayName || 'Cozy Reader',
+        text: newNoteText.trim(),
+        category: newNoteCategory,
+      });
+      setNewNoteText('');
+      soundEngine.playCoin();
+      confetti({ particleCount: 20, spread: 45 });
+    } catch (err) {
+      console.error('Failed to post cafe note:', err);
+    } finally {
+      setIsSubmittingNote(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md animate-fade-in select-none">
       <div className="relative w-full max-w-5xl bg-[#141221] border-2 border-purple-500/40 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.85)] flex flex-col max-h-[92vh] overflow-hidden text-purple-100">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-950/90 via-[#1b152d] to-[#120e22] p-5 border-b border-purple-500/30 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-purple-950/90 via-[#1b152d] to-[#120e22] p-5 border-b border-purple-500/30 flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 to-purple-600 flex items-center justify-center text-xl shadow-lg shadow-purple-950/50">
               📚
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-cozy font-bold text-lg text-white">Project Gutenberg Library</h2>
+                <h2 className="font-cozy font-bold text-lg text-white">Gutenberg Bookshelf & Cafe Library</h2>
                 <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30 font-semibold font-mono">
-                  Free Public Domain Classics
+                  Cloud Synced
                 </span>
               </div>
               <p className="text-xs text-purple-300">
-                Browse, study, and read online in your cozy co-working break
+                Browse public domain classics, bookmark favorite reads, and share cafe recommendations
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Direct Link to Gutenberg.org as requested */}
+            {/* Account Status / Login button */}
+            {currentUser ? (
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-purple-900/40 border border-purple-600/40 rounded-xl text-xs text-purple-200">
+                <Cloud className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="font-mono text-[11px] truncate max-w-[120px]">{currentUser.displayName || currentUser.email}</span>
+              </div>
+            ) : (
+              <button
+                onClick={onOpenAuth}
+                className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-900/70 hover:bg-purple-800 text-purple-200 hover:text-white rounded-xl text-xs font-cozy border border-purple-700/50 transition-all"
+              >
+                <UserIcon className="w-3.5 h-3.5" />
+                <span>Sign In to Sync</span>
+              </button>
+            )}
+
+            {/* Direct Link to Gutenberg.org */}
             <a
               href="https://www.gutenberg.org/ebooks"
               target="_blank"
@@ -316,12 +529,69 @@ export const BookshelfModal: React.FC<BookshelfModalProps> = ({
           </div>
         </div>
 
-        {/* Reader View vs Book Grid */}
+        {/* Navigation Tabs (when not inside reader) */}
+        {!selectedBook && (
+          <div className="px-5 pt-3 bg-[#171328] border-b border-purple-800/30 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('catalog')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl text-xs font-cozy font-bold border-b-2 transition-all ${
+                  activeTab === 'catalog'
+                    ? 'border-purple-400 text-white bg-purple-900/40'
+                    : 'border-transparent text-purple-400 hover:text-purple-200'
+                }`}
+              >
+                <Library className="w-4 h-4" />
+                <span>Classics Catalog ({GUTENBERG_POPULAR_BOOKS.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('my_shelf')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl text-xs font-cozy font-bold border-b-2 transition-all ${
+                  activeTab === 'my_shelf'
+                    ? 'border-amber-400 text-amber-200 bg-amber-950/30'
+                    : 'border-transparent text-purple-400 hover:text-purple-200'
+                }`}
+              >
+                <BookMarked className="w-4 h-4 text-amber-400" />
+                <span>My Bookshelf ({myShelfBooks.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('community')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-t-xl text-xs font-cozy font-bold border-b-2 transition-all ${
+                  activeTab === 'community'
+                    ? 'border-cyan-400 text-cyan-200 bg-cyan-950/30'
+                    : 'border-transparent text-purple-400 hover:text-purple-200'
+                }`}
+              >
+                <StickyNote className="w-4 h-4 text-cyan-400" />
+                <span>Cafe Book Board</span>
+              </button>
+            </div>
+
+            {/* Search Input for catalog/my_shelf */}
+            {activeTab !== 'community' && (
+              <div className="relative mb-2 sm:mb-0">
+                <Search className="w-3.5 h-3.5 text-purple-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Search titles, authors, genres..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="bg-purple-950/80 border border-purple-700/50 rounded-xl pl-8 pr-3 py-1.5 text-xs text-purple-200 placeholder:text-purple-500 focus:outline-none focus:border-purple-400 w-52 sm:w-64"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Reader View vs Main Tabs */}
         {selectedBook ? (
           /* In-App Distraction-Free Reader */
           <div className="flex-1 flex flex-col overflow-hidden">
             {/* Reader Toolbar */}
-            <div className="bg-[#1a152e] border-b border-purple-800/40 px-5 py-2.5 flex items-center justify-between gap-3 text-xs">
+            <div className="bg-[#1a152e] border-b border-purple-800/40 px-5 py-2.5 flex items-center justify-between gap-3 text-xs flex-wrap">
               <button
                 onClick={() => setSelectedBook(null)}
                 className="flex items-center gap-1.5 px-3 py-1 bg-purple-900/60 hover:bg-purple-800 text-purple-200 rounded-lg transition-all font-cozy"
@@ -331,13 +601,13 @@ export const BookshelfModal: React.FC<BookshelfModalProps> = ({
               </button>
 
               <div className="flex items-center gap-2 font-cozy">
-                <span className="font-bold text-white truncate max-w-[200px] sm:max-w-[320px]">
+                <span className="font-bold text-white truncate max-w-[180px] sm:max-w-[280px]">
                   {selectedBook.title}
                 </span>
-                <span className="text-purple-400">by {selectedBook.author}</span>
+                <span className="text-purple-400 text-[11px]">by {selectedBook.author}</span>
               </div>
 
-              {/* Reader Controls */}
+              {/* Reader Controls & Shelf Status */}
               <div className="flex items-center gap-2">
                 {/* Theme Selector */}
                 <div className="flex items-center gap-1 bg-purple-950 p-0.5 rounded-lg border border-purple-800/50">
@@ -349,7 +619,7 @@ export const BookshelfModal: React.FC<BookshelfModalProps> = ({
                   </button>
                   <button
                     onClick={() => setReaderTheme('sepia')}
-                    className={`px-2 py-0.5 rounded text-[11px] font-cozy ${readerTheme === 'sepia' ? 'bg-amber-700 text-white' : 'text-purple-300'}`}
+                    className={`px-2 py-0.5 rounded text-[11px] font-cozy ${readerTheme === 'sepia' ? 'bg-[#e2d7b5] text-[#3d321d] font-bold' : 'text-purple-300'}`}
                   >
                     Sepia
                   </button>
@@ -361,208 +631,475 @@ export const BookshelfModal: React.FC<BookshelfModalProps> = ({
                   </button>
                 </div>
 
-                {/* Font Size */}
-                <div className="flex items-center gap-1 bg-purple-950 p-0.5 rounded-lg border border-purple-800/50 text-[11px]">
-                  <button
-                    onClick={() => setReaderFontSize('sm')}
-                    className={`px-1.5 py-0.5 rounded ${readerFontSize === 'sm' ? 'bg-purple-600 text-white' : 'text-purple-300'}`}
-                  >
-                    A-
-                  </button>
-                  <button
-                    onClick={() => setReaderFontSize('base')}
-                    className={`px-1.5 py-0.5 rounded ${readerFontSize === 'base' ? 'bg-purple-600 text-white' : 'text-purple-300'}`}
-                  >
-                    A
-                  </button>
-                  <button
-                    onClick={() => setReaderFontSize('lg')}
-                    className={`px-1.5 py-0.5 rounded ${readerFontSize === 'lg' ? 'bg-purple-600 text-white' : 'text-purple-300'}`}
-                  >
-                    A+
-                  </button>
+                {/* Font Size Toggle */}
+                <div className="flex items-center gap-1 bg-purple-950 p-0.5 rounded-lg border border-purple-800/50">
+                  {(['sm', 'base', 'lg'] as const).map((sz) => (
+                    <button
+                      key={sz}
+                      onClick={() => setReaderFontSize(sz)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-mono ${readerFontSize === sz ? 'bg-purple-600 text-white' : 'text-purple-400'}`}
+                    >
+                      {sz}
+                    </button>
+                  ))}
                 </div>
 
-                {/* External Full Book on Gutenberg */}
-                <a
-                  href={`https://www.gutenberg.org/ebooks/${selectedBook.id}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 bg-amber-600/80 hover:bg-amber-500 text-white rounded-lg transition-all text-xs font-cozy font-semibold"
-                  title="Read complete book or download epub on Gutenberg"
+                {/* Save / Status Button */}
+                <button
+                  onClick={() => handleSaveToShelf(selectedBook, currentBookStatus, currentBookNote)}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-cozy font-semibold shadow transition-all active:scale-95"
                 >
-                  <span>Full Book</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>{savedBooks[selectedBook.id] ? 'Saved to Shelf' : 'Add to Shelf'}</span>
+                </button>
               </div>
             </div>
 
-            {/* Reader Text Area */}
+            {/* Reader Content Body */}
             <div
               className={`flex-1 overflow-y-auto p-6 sm:p-10 transition-colors ${
                 readerTheme === 'dark'
-                  ? 'bg-[#100d1c] text-[#e2dcf2]'
+                  ? 'bg-[#120f1f] text-slate-200'
                   : readerTheme === 'sepia'
-                  ? 'bg-[#f4ecd8] text-[#422e1b]'
-                  : 'bg-[#fafafa] text-[#1e293b]'
+                  ? 'bg-[#f4ecd8] text-[#3a2e1d]'
+                  : 'bg-[#faf8f5] text-slate-800'
               }`}
             >
               <div className="max-w-2xl mx-auto space-y-6">
-                <div className="border-b pb-4 text-center">
-                  <span className="text-xs font-mono uppercase tracking-widest opacity-60">
+                {/* Book Title & Meta */}
+                <div className="border-b pb-4 text-center border-current/20">
+                  <span className="text-[11px] font-mono tracking-wider opacity-70 uppercase">
                     Project Gutenberg EBook #{selectedBook.id}
                   </span>
-                  <h1 className="text-2xl sm:text-3xl font-serif font-bold mt-1">
+                  <h1 className="font-serif text-2xl sm:text-3xl font-bold mt-1 tracking-tight">
                     {selectedBook.title}
                   </h1>
-                  <p className="text-sm font-serif italic mt-1 opacity-80">
-                    By {selectedBook.author} ({selectedBook.year})
+                  <p className="font-serif italic text-sm mt-1 opacity-80">
+                    by {selectedBook.author} ({selectedBook.year})
                   </p>
-                  <div className="mt-3 text-xs font-cozy font-semibold py-1 px-3 rounded-full inline-block bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                    {selectedBook.chapterOneTitle}
-                  </div>
                 </div>
 
+                {/* Chapter Title */}
+                <div className="text-center pt-2">
+                  <h2 className="font-serif font-bold text-lg text-amber-500/90 tracking-wide">
+                    {selectedBook.chapterOneTitle}
+                  </h2>
+                </div>
+
+                {/* Excerpt Paragraphs */}
                 <div
-                  className={`font-serif leading-relaxed space-y-4 ${
-                    readerFontSize === 'sm'
-                      ? 'text-sm'
-                      : readerFontSize === 'lg'
-                      ? 'text-lg sm:text-xl'
-                      : 'text-base sm:text-lg'
+                  className={`space-y-4 font-serif leading-relaxed tracking-normal select-text ${
+                    readerFontSize === 'sm' ? 'text-sm' : readerFontSize === 'lg' ? 'text-lg' : 'text-base'
                   }`}
                 >
-                  {selectedBook.chapterOneExcerpt.map((para, pIdx) => (
-                    <p key={pIdx} className="indent-6 text-justify">
+                  {selectedBook.chapterOneExcerpt.map((para, i) => (
+                    <p key={i} className="indent-6 text-justify">
                       {para}
                     </p>
                   ))}
                 </div>
 
-                {/* Reader Finished Milestone */}
-                <div className="pt-8 border-t border-purple-800/30 flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div>
-                    <h4 className="font-cozy font-bold text-sm">Completed this chapter preview?</h4>
-                    <p className="text-xs opacity-75">Log your reading time and claim tickets!</p>
+                {/* Reader Study Notes & Reading Status */}
+                <div className="mt-8 p-4 rounded-2xl bg-black/10 border border-current/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-cozy font-bold">
+                      <StickyNote className="w-4 h-4 text-amber-500" />
+                      <span>My Study Notes & Quotes (Cloud Synced)</span>
+                    </div>
+
+                    <div className="flex items-center gap-1 text-[11px]">
+                      {(['want_to_read', 'reading', 'completed'] as const).map((st) => (
+                        <button
+                          key={st}
+                          onClick={() => {
+                            setCurrentBookStatus(st);
+                            handleSaveToShelf(selectedBook, st, currentBookNote);
+                          }}
+                          className={`px-2 py-0.5 rounded-full capitalize font-cozy text-[10px] transition-all ${
+                            currentBookStatus === st
+                              ? 'bg-purple-600 text-white font-bold'
+                              : 'bg-black/20 text-current/70 hover:text-current'
+                          }`}
+                        >
+                          {st.replace(/_/g, ' ')}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <textarea
+                    rows={3}
+                    placeholder="Jot down quotes, vocabulary, or thoughts from this chapter..."
+                    value={currentBookNote}
+                    onChange={(e) => setCurrentBookNote(e.target.value)}
+                    onBlur={() => handleSaveToShelf(selectedBook, currentBookStatus, currentBookNote)}
+                    className="w-full bg-black/10 border border-current/20 rounded-xl p-2.5 text-xs focus:outline-none focus:border-purple-500 text-current placeholder:opacity-50"
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => handleSaveToShelf(selectedBook, currentBookStatus, currentBookNote)}
+                      className="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-cozy font-bold shadow active:scale-95"
+                    >
+                      Save Notes
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chapter Completion Reward & Gutenberg Download Link */}
+                <div className="pt-6 border-t border-current/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-left">
+                    <p className="text-xs opacity-70 font-cozy">
+                      Finished reading this sample excerpt? Claim your study tickets!
+                    </p>
                     <button
                       onClick={() => handleClaimFinishedChapter(selectedBook.id)}
-                      disabled={finishedBonusClaimed[selectedBook.id]}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-cozy font-bold shadow-md transition-all ${
-                        finishedBonusClaimed[selectedBook.id]
-                          ? 'bg-emerald-700/60 text-emerald-200 cursor-default'
-                          : 'bg-purple-600 hover:bg-purple-500 text-white'
+                      disabled={savedBooks[selectedBook.id]?.claimedBonus}
+                      className={`mt-2 flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-cozy font-bold transition-all shadow ${
+                        savedBooks[selectedBook.id]?.claimedBonus
+                          ? 'bg-emerald-800/50 text-emerald-200 border border-emerald-500/40 cursor-default'
+                          : 'bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white active:scale-95'
                       }`}
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{finishedBonusClaimed[selectedBook.id] ? 'Claimed (+10🎟️)' : 'Log Reading (+10🎟️)'}</span>
+                      {savedBooks[selectedBook.id]?.claimedBonus ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-300" />
+                          <span>+10 Tickets Claimed 🎉</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 text-yellow-200" />
+                          <span>Claim +10 Study Tickets</span>
+                        </>
+                      )}
                     </button>
-
-                    <a
-                      href={`https://www.gutenberg.org/ebooks/${selectedBook.id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-xl text-xs font-cozy font-bold shadow-md"
-                    >
-                      <span>Continue on Gutenberg</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
                   </div>
+
+                  <a
+                    href={`https://www.gutenberg.org/ebooks/${selectedBook.id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-purple-900 hover:bg-purple-800 text-white rounded-xl text-xs font-cozy font-bold transition-all shadow"
+                  >
+                    <span>Read Full Book on Gutenberg.org</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          /* Book Catalog Grid */
-          <div className="flex-1 flex flex-col p-5 overflow-hidden">
-            {/* Search Bar & Stats */}
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="w-4 h-4 text-purple-400 absolute left-3 top-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search books, authors, or genres..."
-                  className="w-full bg-purple-950/60 border border-purple-700/50 rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-purple-400/50 focus:outline-hidden font-cozy"
-                />
-              </div>
+          /* Main Library Views */
+          <div className="flex-1 overflow-y-auto p-5 space-y-6">
+            {/* TAB 1: ALL CLASSICS CATALOG */}
+            {activeTab === 'catalog' && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-xs text-purple-300">
+                    Showing {filteredBooks.length} featured public domain literature classics:
+                  </p>
+                </div>
 
-              <div className="text-xs font-cozy text-purple-300 hidden sm:block">
-                Showing <strong className="text-white">{filteredBooks.length}</strong> Popular Public Domain Books
-              </div>
-            </div>
-
-            {/* 12 Books Grid */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredBooks.map((book) => (
-                  <div
-                    key={book.id}
-                    className="bg-[#1b172e] border border-purple-800/40 hover:border-purple-500/60 rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all hover:scale-[1.02] group"
-                  >
-                    <div>
-                      {/* Book Cover Aesthetic */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {filteredBooks.map((book) => {
+                    const isSaved = !!savedBooks[book.id];
+                    return (
                       <div
-                        style={{ backgroundColor: book.coverColor }}
-                        className="w-full h-36 rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden shadow-inner border border-white/10 mb-3"
+                        key={book.id}
+                        className="bg-[#1b172e] border border-purple-800/40 hover:border-purple-500/60 rounded-2xl p-4 flex flex-col justify-between shadow-lg transition-all hover:scale-[1.02] group"
                       >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-white/70">
-                            #{book.id}
-                          </span>
-                          <span className="text-[10px] bg-black/40 text-amber-300 px-2 py-0.5 rounded-full font-mono">
-                            {book.downloads}
-                          </span>
-                        </div>
-
                         <div>
-                          <h3 className="font-serif font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
-                            {book.title}
-                          </h3>
-                          <p className="text-xs font-serif text-white/80 mt-0.5">{book.author}</p>
+                          {/* Book Cover Aesthetic */}
+                          <div
+                            style={{ backgroundColor: book.coverColor }}
+                            className="w-full h-36 rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden shadow-inner border border-white/10 mb-3"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-mono uppercase tracking-wider text-white/70">
+                                #{book.id}
+                              </span>
+                              <span className="text-[10px] bg-black/40 text-amber-300 px-2 py-0.5 rounded-full font-mono">
+                                {book.downloads}
+                              </span>
+                            </div>
+
+                            <div>
+                              <h3 className="font-serif font-bold text-white text-base sm:text-lg leading-tight line-clamp-2">
+                                {book.title}
+                              </h3>
+                              <p className="text-xs font-serif text-white/80 mt-0.5">{book.author}</p>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-white/60">
+                              <span>{book.category}</span>
+                              <span>{book.year}</span>
+                            </div>
+                          </div>
+
+                          {/* Description */}
+                          <p className="text-xs text-purple-300/90 font-cozy line-clamp-2 mb-3">
+                            {book.description}
+                          </p>
                         </div>
 
-                        <div className="flex items-center justify-between text-[10px] text-white/60">
-                          <span>{book.category}</span>
-                          <span>{book.year}</span>
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 pt-2 border-t border-purple-900/50">
+                          <button
+                            onClick={() => {
+                              soundEngine.playChime('chime');
+                              setSelectedBook(book);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-xs font-cozy font-bold text-white shadow-md transition-all active:scale-95"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Read Online</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (isSaved) {
+                                handleRemoveFromShelf(book.id);
+                              } else {
+                                handleSaveToShelf(book, 'want_to_read');
+                              }
+                            }}
+                            className={`p-2 rounded-xl border transition-all ${
+                              isSaved
+                                ? 'bg-amber-600 text-white border-amber-400'
+                                : 'bg-purple-950/80 hover:bg-purple-900 text-purple-300 border-purple-700/50'
+                            }`}
+                            title={isSaved ? 'Remove from My Bookshelf' : 'Bookmark to My Bookshelf'}
+                          >
+                            <Bookmark className="w-3.5 h-3.5" />
+                          </button>
+
+                          <a
+                            href={`https://www.gutenberg.org/ebooks/${book.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 rounded-xl text-purple-300 hover:text-white transition-all"
+                            title="View on Gutenberg.org"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </a>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-                      {/* Description */}
-                      <p className="text-xs text-purple-300/90 font-cozy line-clamp-2 mb-3">
-                        {book.description}
+            {/* TAB 2: MY BOOKSHELF */}
+            {activeTab === 'my_shelf' && (
+              <div className="space-y-4">
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <BookMarked className="w-5 h-5 text-amber-400" />
+                    <div>
+                      <h3 className="font-cozy font-bold text-sm text-white">Your Personal Study Bookshelf</h3>
+                      <p className="text-[11px] text-amber-200/80">
+                        Track books you want to read, active books, and personal notes
                       </p>
                     </div>
+                  </div>
+                  {currentUser ? (
+                    <span className="text-[11px] bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-full border border-emerald-500/40 flex items-center gap-1 font-mono">
+                      <Cloud className="w-3 h-3" />
+                      Synced to Firestore
+                    </span>
+                  ) : (
+                    <button
+                      onClick={onOpenAuth}
+                      className="text-xs bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded-xl font-cozy font-bold shadow"
+                    >
+                      Sign In to Save Permanently
+                    </button>
+                  )}
+                </div>
 
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 pt-2 border-t border-purple-900/50">
-                      <button
-                        onClick={() => {
-                          soundEngine.playChime('chime');
-                          setSelectedBook(book);
-                        }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-xs font-cozy font-bold text-white shadow-md transition-all active:scale-95"
-                      >
-                        <BookOpen className="w-3.5 h-3.5" />
-                        <span>Read Online</span>
-                      </button>
+                {myShelfBooks.length === 0 ? (
+                  <div className="text-center py-16 bg-[#161226] border border-purple-800/40 rounded-3xl p-6">
+                    <Bookmark className="w-12 h-12 text-purple-600/60 mx-auto mb-3" />
+                    <h3 className="text-white font-cozy font-bold text-base">Your bookshelf is empty</h3>
+                    <p className="text-xs text-purple-400 mt-1 max-w-sm mx-auto">
+                      Click the bookmark icon or "Read Online" on any Gutenberg classic to add it to your cozy reading nook!
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('catalog')}
+                      className="mt-4 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-cozy font-bold transition-all shadow"
+                    >
+                      Explore Classics Catalog
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {myShelfBooks.map((book) => {
+                      const shelfItem = savedBooks[book.id];
+                      return (
+                        <div
+                          key={book.id}
+                          className="bg-[#1b172e] border border-amber-600/30 rounded-2xl p-4 flex flex-col justify-between shadow-lg"
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <span
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-mono uppercase font-bold ${
+                                  shelfItem?.status === 'completed'
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                    : shelfItem?.status === 'reading'
+                                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    : 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                }`}
+                              >
+                                {shelfItem?.status?.replace(/_/g, ' ') || 'Saved'}
+                              </span>
 
-                      <a
-                        href={`https://www.gutenberg.org/ebooks/${book.id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="p-1.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-700/50 rounded-xl text-purple-300 hover:text-white transition-all"
-                        title="View on Gutenberg.org"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
+                              <button
+                                onClick={() => handleRemoveFromShelf(book.id)}
+                                className="text-purple-400 hover:text-rose-400 text-xs p-1"
+                                title="Remove from shelf"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            <h4 className="font-serif font-bold text-white text-base leading-tight">
+                              {book.title}
+                            </h4>
+                            <p className="text-xs text-purple-300 font-serif mb-2">by {book.author}</p>
+
+                            {shelfItem?.notes && (
+                              <div className="bg-purple-950/60 p-2.5 rounded-xl border border-purple-800/40 text-[11px] text-purple-200 font-mono italic my-2">
+                                "{shelfItem.notes}"
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 pt-2 border-t border-purple-900/50">
+                            <button
+                              onClick={() => {
+                                soundEngine.playChime('chime');
+                                setSelectedBook(book);
+                              }}
+                              className="flex-1 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-cozy font-bold shadow flex items-center justify-center gap-1.5"
+                            >
+                              <BookOpen className="w-3.5 h-3.5" />
+                              <span>Open Reader</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: CAFE BOOK BOARD (COMMUNITY STICKY NOTES IN FIRESTORE) */}
+            {activeTab === 'community' && (
+              <div className="space-y-5">
+                <div className="bg-[#171329] border border-cyan-500/30 rounded-2xl p-4 flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <StickyNote className="w-5 h-5 text-cyan-400" />
+                    <div>
+                      <h3 className="font-cozy font-bold text-sm text-white">Cafe Coworker Book Board</h3>
+                      <p className="text-[11px] text-cyan-200/80">
+                        Leave public book recommendations, study quotes, and literature thoughts for fellow coworkers
+                      </p>
                     </div>
                   </div>
-                ))}
+                  <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-mono border border-cyan-500/30">
+                    Live Firestore Feed
+                  </span>
+                </div>
+
+                {/* Sticky Note Creator Form */}
+                <form onSubmit={handlePostCommunityNote} className="bg-[#1a152d] border border-purple-800/50 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-cozy text-purple-300 font-bold flex items-center gap-1.5">
+                      <MessageSquarePlus className="w-4 h-4 text-purple-400" />
+                      <span>Post a Book Recommendation or Literature Quote</span>
+                    </label>
+                    <select
+                      value={newNoteCategory}
+                      onChange={(e) => setNewNoteCategory(e.target.value)}
+                      className="bg-purple-950 border border-purple-700/50 rounded-xl px-2.5 py-1 text-[11px] text-purple-200 focus:outline-none"
+                    >
+                      <option value="Recommendation">📚 Recommendation</option>
+                      <option value="Quote">💬 Favorite Quote</option>
+                      <option value="Study Tip">💡 Study Tip</option>
+                      <option value="Cozy Break">☕ Cozy Break</option>
+                    </select>
+                  </div>
+
+                  <textarea
+                    rows={2}
+                    required
+                    maxLength={500}
+                    placeholder="e.g., Highly recommend Frankenstein for rainy afternoon study breaks! Mary Shelley's prose is mesmerizing..."
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    className="w-full bg-purple-950/80 border border-purple-700/50 rounded-xl p-3 text-xs text-white placeholder:text-purple-500 focus:outline-none focus:border-cyan-400"
+                  />
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[10px] text-purple-400 font-mono">
+                      Posting as: <strong className="text-white">{currentUser?.displayName || 'Cozy Coworker'}</strong>
+                    </span>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingNote || !newNoteText.trim()}
+                      className="px-4 py-1.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-cozy font-bold shadow flex items-center gap-1.5 disabled:opacity-50 active:scale-95"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{isSubmittingNote ? 'Pinning...' : 'Pin to Board'}</span>
+                    </button>
+                  </div>
+                </form>
+
+                {/* Notes Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                  {/* Default Seed sticky note if empty */}
+                  {communityNotes.length === 0 && (
+                    <div className="bg-[#241a3a] border border-amber-500/40 rounded-2xl p-4 shadow-md rotate-[-1deg]">
+                      <div className="flex items-center justify-between text-[10px] text-amber-300 font-mono mb-2">
+                        <span>📚 Recommendation</span>
+                        <span>Cafe Curators</span>
+                      </div>
+                      <p className="text-xs text-amber-100 font-serif leading-relaxed">
+                        “It is a truth universally acknowledged, that a single coworker in possession of a cup of coffee, must be in want of deep focus.” Welcome to our bookshelf!
+                      </p>
+                    </div>
+                  )}
+
+                  {communityNotes.map((note) => (
+                    <div
+                      key={note.id}
+                      className="bg-[#211a36] border border-purple-700/40 hover:border-cyan-500/50 rounded-2xl p-4 shadow-md transition-all space-y-2 flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] text-cyan-300 font-mono mb-1">
+                          <span className="bg-cyan-950/80 px-2 py-0.5 rounded-md border border-cyan-800/50">
+                            {note.category || 'Note'}
+                          </span>
+                          <span className="text-purple-400">
+                            {note.createdAt ? new Date(note.createdAt).toLocaleDateString() : 'Recent'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-purple-100 font-serif leading-relaxed line-clamp-4">
+                          "{note.text}"
+                        </p>
+                      </div>
+
+                      <div className="text-[10px] text-purple-400 font-cozy font-bold flex items-center gap-1 border-t border-purple-900/50 pt-2">
+                        <UserIcon className="w-3 h-3 text-purple-500" />
+                        <span>{note.authorName}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </div>
