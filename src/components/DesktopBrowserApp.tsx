@@ -191,6 +191,7 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
   userName,
 }) => {
   const [activeTab, setActiveTab] = useState<'social' | 'boutique' | 'wallpapers'>('social');
+  const [wallpaperFilter, setWallpaperFilter] = useState<'all' | 'food' | 'pet' | 'anime' | 'scenery' | 'basic'>('all');
   const [urlInput, setUrlInput] = useState('brew://social-lounge');
   const [posts, setPosts] = useState<SocialPost[]>(() => {
     const saved = localStorage.getItem('coworkingbrew_browser_posts');
@@ -638,67 +639,97 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
 
         {/* ================= TAB 3: CUTE EXTENSIVE WALLPAPERS ================= */}
         {activeTab === 'wallpapers' && (
-          <div className="space-y-6">
+          <div className="space-y-5">
             <div className="bg-gradient-to-r from-pink-950/60 via-purple-950/60 to-indigo-950/60 border border-pink-500/40 rounded-2xl p-5 shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <ImageIcon className="w-5 h-5 text-pink-400" />
-                  <span>Aesthetic & Cute Wallpapers Gallery</span>
+                  <span>Safari Pro Luxe Wallpapers Boutique</span>
                 </h3>
                 <p className="text-xs text-pink-200/80 mt-1 max-w-xl">
-                  Choose from an extensive selection of cozy, pastel, anime-inspired, and cyberpunk wallpapers to decorate your desktop workstation!
+                  Explore cute cartoon foods, sweet pets, anime skies, and cozy lofi backgrounds! Instant 1-click apply to your desktop workstation.
                 </p>
               </div>
 
               <div className="text-right shrink-0">
-                <span className="text-[11px] text-pink-300 block font-mono">12 Themes Available</span>
+                <span className="text-[11px] text-pink-300 block font-mono">15+ Handcrafted Themes</span>
                 <span className="text-xs text-purple-300">1-Click Apply to OS</span>
               </div>
             </div>
 
+            {/* Category Filter Chips */}
+            <div className="flex flex-wrap items-center gap-2 border-b border-purple-800/40 pb-3">
+              {[
+                { id: 'all', label: '🌟 All Themes' },
+                { id: 'food', label: '🍜 Cute Foods' },
+                { id: 'pet', label: '🐾 Cute Pets' },
+                { id: 'anime', label: '🌸 Anime & Aesthetic' },
+                { id: 'scenery', label: '🌲 Scenery & Lofi' },
+                { id: 'basic', label: '🌊 Basic Defaults' },
+              ].map((chip) => (
+                <button
+                  key={chip.id}
+                  onClick={() => setWallpaperFilter(chip.id as any)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-cozy transition-all flex items-center gap-1.5 ${
+                    wallpaperFilter === chip.id
+                      ? 'bg-pink-600 text-white font-bold shadow-md ring-1 ring-pink-400'
+                      : 'bg-purple-950/60 text-purple-300 hover:text-white hover:bg-purple-900/60 border border-purple-800/40'
+                  }`}
+                >
+                  <span>{chip.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Wallpapers Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {WALLPAPERS.map((wp) => {
+              {WALLPAPERS.filter((wp) => wallpaperFilter === 'all' || wp.category === wallpaperFilter).map((wp) => {
                 const isUnlocked = unlockedWallpapers.includes(wp.id);
                 const isActive = activeWallpaper === wp.id;
 
                 return (
                   <div
                     key={wp.id}
-                    className={`group relative rounded-2xl overflow-hidden border p-3 flex flex-col justify-between transition-all ${
+                    className={`group relative rounded-2xl overflow-hidden border p-3.5 flex flex-col justify-between transition-all ${
                       isActive
                         ? 'border-pink-400 bg-[#231536] ring-2 ring-pink-400/50 shadow-xl'
                         : 'border-purple-500/30 bg-[#161226] hover:border-pink-500/60 shadow-md'
                     }`}
                   >
                     {/* Wallpaper Preview Swatch */}
-                    <div
-                      className={`w-full h-24 rounded-xl shadow-inner relative overflow-hidden transition-transform group-hover:scale-102 ${wp.gradientClass}`}
-                    >
-                      <img
-                        src={wp.imageUrl}
-                        alt={wp.name}
-                        onError={(e) => {
-                          if ('svgFallback' in wp && (wp as any).svgFallback) {
-                            e.currentTarget.src = (wp as any).svgFallback;
-                          }
-                        }}
-                        className="w-full h-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute inset-0 bg-black/15" />
-                      {isActive && (
-                        <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md flex items-center gap-1 z-10 border border-white/20">
-                          <Check className="w-3 h-3 stroke-[3]" />
-                          <span>ACTIVE</span>
-                        </div>
-                      )}
-                    </div>
+                    <div>
+                      <div
+                        className={`w-full h-24 rounded-xl shadow-inner relative overflow-hidden transition-transform group-hover:scale-102 ${wp.gradientClass}`}
+                      >
+                        <img
+                          src={wp.imageUrl}
+                          alt={wp.name}
+                          onError={(e) => {
+                            if ('svgFallback' in wp && (wp as any).svgFallback) {
+                              e.currentTarget.src = (wp as any).svgFallback;
+                            }
+                          }}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/15" />
+                        {isActive && (
+                          <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md flex items-center gap-1 z-10 border border-white/20">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                            <span>ACTIVE</span>
+                          </div>
+                        )}
+                        <span className="absolute bottom-2 left-2 bg-black/75 backdrop-blur-md px-2 py-0.5 rounded text-[9px] text-pink-200 font-mono">
+                          {wp.category.toUpperCase()}
+                        </span>
+                      </div>
 
-                    <div className="mt-3 space-y-1">
-                      <h4 className="text-xs font-bold text-white group-hover:text-pink-300 transition-colors">
-                        {wp.name}
-                      </h4>
-                      <p className="text-[10px] text-purple-300/80 line-clamp-2 leading-relaxed">{wp.desc}</p>
+                      <div className="mt-2.5 space-y-0.5">
+                        <h4 className="text-xs font-bold text-white group-hover:text-pink-300 transition-colors">
+                          {wp.name}
+                        </h4>
+                        <p className="text-[10px] text-purple-300/80 line-clamp-2 leading-relaxed">{wp.desc}</p>
+                      </div>
                     </div>
 
                     <div className="mt-3 pt-2.5 border-t border-purple-800/30 flex items-center justify-between">

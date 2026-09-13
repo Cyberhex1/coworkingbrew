@@ -835,108 +835,55 @@ export function buildVoxelPet(type: DeskConfig['petType'], color?: string): THRE
 }
 
 // -------------------------------------------------------------
-// 3D Voxel High-Detail Tech Office Environment Builder
+// 3D Voxel Whiteboard / Sprint Kanban Board Builder
+// Crisp white dry-erase face, zero z-fighting, theme-matching frame
 // -------------------------------------------------------------
-export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
-  roomGroup: THREE.Group;
-  lightGroup: THREE.Group;
-  updateLights: (tod: TimeOfDay) => void;
-} {
-  const roomGroup = new THREE.Group();
-  const lightGroup = new THREE.Group();
+function buildThemedWhiteboard(theme: CoWorkingRoom['theme']): THREE.Group {
+  const whiteboardGroup = new THREE.Group();
+  whiteboardGroup.name = 'hotspot_sprint_board';
+  whiteboardGroup.userData = { hotspot: 'sprint_board' };
+  whiteboardGroup.position.set(-4.2, 2.7, -8.75);
 
-  const roomWidth = 20;
-  const roomDepth = 18;
-  const wallHeight = 5.2;
+  let frameColor = '#cbd5e1'; // Aluminum silver default
+  if (theme === 'tea_loft' || theme === 'treehouse') frameColor = '#78350f'; // Warm cedar wood
+  else if (theme === 'loft_office') frameColor = '#334155'; // Industrial steel
+  else if (theme === 'greenhouse') frameColor = '#14532d'; // Wrought iron green
+  else if (theme === 'arcade') frameColor = '#06b6d4'; // Cyber cyan
+  else if (theme === 'cafe') frameColor = '#451a03'; // Dark walnut
 
-  // 1. Professional Office Floor (Bright Nordic Ash Hardwood & Light Acoustic Carpet)
-  const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#cbd5e1');
-  floorBase.position.set(0, -0.15, 0);
-  floorBase.receiveShadow = true;
-  roomGroup.add(floorBase);
+  // 1. Backing panel (z = 0)
+  const backPanel = createVoxelBox(4.4, 2.5, 0.06, frameColor, { roughness: 0.4 });
+  backPanel.position.set(0, 0, 0);
 
-  // Main Workstation Modern Felt Carpet (Bright Modern Slate-Grey Felt - Expanded for 8 desks)
-  const carpet = createVoxelBox(14.5, 0.03, 10.5, '#475569', { roughness: 0.8 });
-  carpet.position.set(0, 0.015, 0.6);
-  carpet.receiveShadow = true;
-  roomGroup.add(carpet);
+  // 2. Whiteboard Face (z = 0.04, pure crisp glossy white)
+  const boardFace = createVoxelBox(4.16, 2.26, 0.04, '#ffffff', { roughness: 0.15 });
+  boardFace.position.set(0, 0, 0.035);
 
-  // Perimeter Polished Warm Oak Floor Strip
-  const woodBorder = createVoxelBox(roomWidth - 0.4, 0.02, roomDepth - 0.4, '#d7c4a3', { roughness: 0.4 });
-  woodBorder.position.set(0, 0.005, 0);
-  roomGroup.add(woodBorder);
+  // 3. Header Title Bar: "TEAM SPRINT & KANBAN" (z = 0.06)
+  const titleBarColor = theme === 'arcade' ? '#4c1d95' : theme === 'tea_loft' ? '#713f12' : '#1e1b4b';
+  const boardTitleBar = createVoxelBox(3.9, 0.24, 0.02, titleBarColor);
+  boardTitleBar.position.set(0, 0.9, 0.06);
 
-  // 2. Bright Modern Office Studio Walls (Bright Warm White / Architectural Nordic Slate)
-  const wallColor = '#f1f5f9'; // Clean, bright Scandinavian tech studio wall
-  const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, wallColor, { roughness: 0.5 });
-  backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
-  roomGroup.add(backWall);
+  // 4. Column Header Badges on the Whiteboard (TODO, IN PROGRESS, REVIEW, DONE)
+  const colBadge1 = createVoxelBox(0.85, 0.16, 0.02, '#3b82f6'); // TODO
+  colBadge1.position.set(-1.45, 0.65, 0.06);
+  const colBadge2 = createVoxelBox(0.85, 0.16, 0.02, '#f59e0b'); // IN PROGRESS
+  colBadge2.position.set(-0.45, 0.65, 0.06);
+  const colBadge3 = createVoxelBox(0.85, 0.16, 0.02, '#8b5cf6'); // REVIEW
+  colBadge3.position.set(0.55, 0.65, 0.06);
+  const colBadge4 = createVoxelBox(0.85, 0.16, 0.02, '#10b981'); // DONE
+  colBadge4.position.set(1.55, 0.65, 0.06);
 
-  const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, wallColor, { roughness: 0.5 });
-  leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
-  roomGroup.add(leftWall);
+  // 5. Clean column dividing grid lines
+  const colLine1 = createVoxelBox(0.02, 1.35, 0.02, '#e2e8f0');
+  colLine1.position.set(-0.95, -0.15, 0.055);
+  const colLine2 = createVoxelBox(0.02, 1.35, 0.02, '#e2e8f0');
+  colLine2.position.set(0.05, -0.15, 0.055);
+  const colLine3 = createVoxelBox(0.02, 1.35, 0.02, '#e2e8f0');
+  colLine3.position.set(1.05, -0.15, 0.055);
 
-  // Modern Architectural Accent Baseboards
-  const baseboardB = createVoxelBox(roomWidth, 0.25, 0.35, '#334155');
-  baseboardB.position.set(0, 0.125, -roomDepth / 2);
-  const baseboardL = createVoxelBox(0.35, 0.25, roomDepth, '#334155');
-  baseboardL.position.set(-roomWidth / 2, 0.125, 0);
-  roomGroup.add(baseboardB, baseboardL);
-
-  // 3. Panoramic High-Rise Skyline Windows with City Skyscraper View
-  const windowFrame = createVoxelBox(6.5, 2.8, 0.2, '#1e293b');
-  windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
-  const windowGlass = createVoxelBox(6.3, 2.6, 0.05, '#38bdf8', {
-    emissive: timeOfDay === 'night' ? '#312e81' : timeOfDay === 'sunset' ? '#ea580c' : '#7dd3fc',
-    emissiveIntensity: timeOfDay === 'night' ? 0.6 : 0.85,
-    transparent: true,
-    opacity: 0.92,
-  });
-  windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
-
-  // Window mullions (steel office window bars)
-  const mullionV1 = createVoxelBox(0.08, 2.6, 0.08, '#1e293b');
-  mullionV1.position.set(0.5, 2.8, -roomDepth / 2 + 0.18);
-  const mullionV2 = createVoxelBox(0.08, 2.6, 0.08, '#1e293b');
-  mullionV2.position.set(4.5, 2.8, -roomDepth / 2 + 0.18);
-  const mullionH = createVoxelBox(6.3, 0.08, 0.08, '#1e293b');
-  mullionH.position.set(2.5, 2.8, -roomDepth / 2 + 0.18);
-  roomGroup.add(windowFrame, windowGlass, mullionV1, mullionV2, mullionH);
-
-  // 4. Blackboard / Room Directory & Sprint Board on Back Wall
-  const blackboardGroup = new THREE.Group();
-  blackboardGroup.name = 'hotspot_blackboard';
-  blackboardGroup.userData = { hotspot: 'blackboard' };
-  blackboardGroup.position.set(-4.2, 2.8, -roomDepth / 2 + 0.2);
-
-  const boardFrame = createVoxelBox(4.4, 2.5, 0.1, '#78350f', { roughness: 0.7 }); // Rich warm wood frame
-  const boardFace = createVoxelBox(4.2, 2.3, 0.06, '#182420', { roughness: 0.95 }); // Deep slate-green chalkboard
-  boardFace.position.set(0, 0, 0.02);
-
-  // Top Blackboard Header: "ROOM DIRECTORY & HALLWAY"
-  const boardTitleBar = createVoxelBox(3.8, 0.28, 0.02, '#1e293b');
-  boardTitleBar.position.set(0, 0.92, 0.05);
-
-  // Chalk written room category badges on the blackboard
-  const chalkBadge1 = createVoxelBox(0.85, 0.16, 0.02, '#38bdf8'); // Offices
-  chalkBadge1.position.set(-1.45, 0.65, 0.06);
-  const chalkBadge2 = createVoxelBox(0.85, 0.16, 0.02, '#4ade80'); // Tea & Cafes
-  chalkBadge2.position.set(-0.45, 0.65, 0.06);
-  const chalkBadge3 = createVoxelBox(0.85, 0.16, 0.02, '#fbbf24'); // Nature Lofts
-  chalkBadge3.position.set(0.55, 0.65, 0.06);
-  const chalkBadge4 = createVoxelBox(0.85, 0.16, 0.02, '#f472b6'); // Night Dens
-  chalkBadge4.position.set(1.55, 0.65, 0.06);
-
-  // Chalk lines & drawings on the blackboard
-  const chalkLine1 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
-  chalkLine1.position.set(-0.95, -0.15, 0.06);
-  const chalkLine2 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
-  chalkLine2.position.set(0.05, -0.15, 0.06);
-  const chalkLine3 = createVoxelBox(0.03, 1.3, 0.02, '#94a3b8');
-  chalkLine3.position.set(1.05, -0.15, 0.06);
-
-  // Chalk room notes & sticky cards on the blackboard
-  const stickyColors = ['#facc15', '#f472b6', '#38bdf8', '#4ade80', '#fb923c', '#e2e8f0'];
+  // 6. Colorful sticky task notes on the whiteboard
+  const stickyColors = ['#fef08a', '#f472b6', '#38bdf8', '#86efac', '#fdba74', '#e0e7ff'];
   const stickyCoords = [
     [-1.5, 0.3], [-1.35, -0.1], [-1.55, -0.5],
     [-0.5, 0.35], [-0.35, -0.05], [-0.55, -0.45],
@@ -945,334 +892,99 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   ];
   stickyCoords.forEach(([sx, sy], sIdx) => {
     const st = createVoxelBox(0.24, 0.22, 0.02, stickyColors[sIdx % stickyColors.length]);
-    st.position.set(sx, sy, 0.06);
-    blackboardGroup.add(st);
+    st.position.set(sx, sy, 0.065);
+    whiteboardGroup.add(st);
   });
 
-  blackboardGroup.add(
-    boardFrame,
+  whiteboardGroup.add(
+    backPanel,
     boardFace,
     boardTitleBar,
-    chalkBadge1,
-    chalkBadge2,
-    chalkBadge3,
-    chalkBadge4,
-    chalkLine1,
-    chalkLine2,
-    chalkLine3
+    colBadge1,
+    colBadge2,
+    colBadge3,
+    colBadge4,
+    colLine1,
+    colLine2,
+    colLine3
   );
 
-  // Wooden chalk tray with colorful chalk sticks and felt eraser
-  const chalkTray = createVoxelBox(3.8, 0.08, 0.14, '#78350f', { roughness: 0.7 });
-  chalkTray.position.set(0, -1.18, 0.08);
-  const chalkWhite = createVoxelBox(0.14, 0.04, 0.04, '#ffffff');
-  chalkWhite.position.set(-0.7, -1.12, 0.08);
-  const chalkYellow = createVoxelBox(0.14, 0.04, 0.04, '#facc15');
-  chalkYellow.position.set(-0.45, -1.12, 0.08);
-  const chalkCyan = createVoxelBox(0.14, 0.04, 0.04, '#38bdf8');
-  chalkCyan.position.set(-0.2, -1.12, 0.08);
-  const chalkPink = createVoxelBox(0.14, 0.04, 0.04, '#f472b6');
-  chalkPink.position.set(0.05, -1.12, 0.08);
-  const feltEraser = createVoxelBox(0.28, 0.06, 0.09, '#334155');
-  feltEraser.position.set(0.45, -1.12, 0.08);
-  blackboardGroup.add(chalkTray, chalkWhite, chalkYellow, chalkCyan, chalkPink, feltEraser);
+  // 7. Marker tray with colorful dry-erase markers and felt eraser
+  const markerTray = createVoxelBox(3.8, 0.08, 0.14, frameColor, { metalness: 0.6, roughness: 0.3 });
+  markerTray.position.set(0, -1.18, 0.08);
+  const markerBlack = createVoxelBox(0.14, 0.04, 0.04, '#0f172a');
+  markerBlack.position.set(-0.7, -1.12, 0.08);
+  const markerBlue = createVoxelBox(0.14, 0.04, 0.04, '#2563eb');
+  markerBlue.position.set(-0.45, -1.12, 0.08);
+  const markerRed = createVoxelBox(0.14, 0.04, 0.04, '#dc2626');
+  markerRed.position.set(-0.2, -1.12, 0.08);
+  const markerGreen = createVoxelBox(0.14, 0.04, 0.04, '#16a34a');
+  markerGreen.position.set(0.05, -1.12, 0.08);
+  const boardEraser = createVoxelBox(0.28, 0.06, 0.09, '#1e293b');
+  boardEraser.position.set(0.45, -1.12, 0.08);
+  whiteboardGroup.add(markerTray, markerBlack, markerBlue, markerRed, markerGreen, boardEraser);
 
-  roomGroup.add(blackboardGroup);
+  return whiteboardGroup;
+}
 
-  // 5. World Time Zone Clocks (SF, NYC, LON, TYO)
-  const clockGroup = new THREE.Group();
-  clockGroup.position.set(-4.2, 4.35, -roomDepth / 2 + 0.15);
-  const cities = ['SFO', 'NYC', 'LON', 'TYO'];
-  cities.forEach((city, cIdx) => {
-    const cx = -1.5 + cIdx * 1.0;
-    const cFrame = createVoxelBox(0.55, 0.55, 0.06, '#1e293b');
-    cFrame.position.set(cx, 0, 0);
-    const cFace = createVoxelBox(0.48, 0.48, 0.05, '#ffffff');
-    cFace.position.set(cx, 0, 0.02);
-    const cHandH = createVoxelBox(0.03, 0.16, 0.02, '#0f172a');
-    cHandH.position.set(cx, 0.05, 0.05);
-    cHandH.rotation.z = cIdx * 1.5;
-    const cHandM = createVoxelBox(0.2, 0.03, 0.02, '#ef4444');
-    cHandM.position.set(cx + 0.06, 0, 0.05);
-    clockGroup.add(cFrame, cFace, cHandH, cHandM);
-  });
-  roomGroup.add(clockGroup);
-
-  // 6. Glass Conference / Meeting Room (Right Side Partition)
-  const confRoom = new THREE.Group();
-  confRoom.position.set(roomWidth / 2 - 1.8, 0, 1.5);
-
-  // Glass Wall Partition
-  const glassWall = createVoxelBox(0.1, wallHeight * 0.8, 6.5, '#bae6fd', {
-    emissive: '#bae6fd',
-    emissiveIntensity: 0.35,
-    transparent: true,
-    opacity: 0.4,
-  });
-  glassWall.position.set(-1.8, wallHeight * 0.4, 0);
-  const glassFrameT = createVoxelBox(0.14, 0.12, 6.5, '#334155');
-  glassFrameT.position.set(-1.8, wallHeight * 0.8, 0);
-  const glassFrameB = createVoxelBox(0.14, 0.12, 6.5, '#334155');
-  glassFrameB.position.set(-1.8, 0.06, 0);
-
-  // Frosted Distraction Privacy Stripe on glass
-  const frostStripe = createVoxelBox(0.12, 0.4, 6.5, '#ffffff', { transparent: true, opacity: 0.75 });
-  frostStripe.position.set(-1.8, 1.4, 0);
-
-  confRoom.add(glassWall, glassFrameT, glassFrameB, frostStripe);
-
-  // Conference Table (Warm Walnut)
-  const confTable = createVoxelBox(1.6, 0.1, 3.8, '#582c0e', { roughness: 0.3 });
-  confTable.position.set(0, 0.75, 0);
-  const confLeg1 = createVoxelBox(0.8, 0.7, 0.2, '#1e293b');
-  confLeg1.position.set(0, 0.35, -1.4);
-  const confLeg2 = createVoxelBox(0.8, 0.7, 0.2, '#1e293b');
-  confLeg2.position.set(0, 0.35, 1.4);
-
-  // Conference Triangle Speakerphone
-  const speakerPhone = createVoxelBox(0.35, 0.06, 0.35, '#0f172a');
-  speakerPhone.position.set(0, 0.82, 0);
-
-  // Conference Leather Chairs (4 chairs around table)
-  const confChairPositions = [
-    [-0.7, -0.9, Math.PI / 2],
-    [-0.7, 0.9, Math.PI / 2],
-    [0.7, -0.9, -Math.PI / 2],
-    [0.7, 0.9, -Math.PI / 2],
-  ];
-  confChairPositions.forEach(([cx, cz, crot]) => {
-    const ch = new THREE.Group();
-    ch.position.set(cx, 0, cz);
-    ch.rotation.y = crot;
-    const cSeat = createVoxelBox(0.5, 0.08, 0.5, '#334155');
-    cSeat.position.set(0, 0.45, 0);
-    const cBack = createVoxelBox(0.5, 0.6, 0.08, '#1e293b');
-    cBack.position.set(0, 0.75, -0.22);
-    const cStem = createVoxelBox(0.08, 0.42, 0.08, '#cbd5e1', { metalness: 0.8 });
-    cStem.position.set(0, 0.21, 0);
-    ch.add(cSeat, cBack, cStem);
-    confRoom.add(ch);
-  });
-
-  // Presentation 75" TV Screen on back of conf room
-  const presScreen = createVoxelBox(0.08, 1.4, 2.4, '#1e293b');
-  presScreen.position.set(1.4, 2.6, 0);
-  const presDisplay = createVoxelBox(0.04, 1.25, 2.25, '#0284c7', {
-    emissive: '#38bdf8',
-    emissiveIntensity: 0.8,
-  });
-  presDisplay.position.set(1.35, 2.6, 0);
-  confRoom.add(confTable, confLeg1, confLeg2, speakerPhone, presScreen, presDisplay);
-  roomGroup.add(confRoom);
-
-  // 7. Kitchenette, Espresso Bar & Water Dispenser (Left Wall)
-  const kitchenGroup = new THREE.Group();
-  kitchenGroup.name = 'hotspot_espresso';
-  kitchenGroup.userData = { hotspot: 'espresso' };
-  kitchenGroup.position.set(-roomWidth / 2 + 1.2, 0, -4.2);
-
-  // L-Shaped Kitchen Counter & Cabinets
-  const counterBase = createVoxelBox(1.5, 0.9, 2.8, '#334155');
-  counterBase.position.set(0, 0.45, 0);
-  const counterTop = createVoxelBox(1.6, 0.08, 2.9, '#f8fafc', { roughness: 0.2 });
-  counterTop.position.set(0, 0.94, 0);
-
-  // Commercial Double Espresso Machine
-  const espressoMachine = createVoxelBox(0.65, 0.58, 0.65, '#e2e8f0', { metalness: 0.9, roughness: 0.2 });
-  espressoMachine.position.set(0.1, 1.28, -0.6);
-  const portafilter = createVoxelBox(0.1, 0.08, 0.24, '#0f172a');
-  portafilter.position.set(0.1, 1.18, -0.22);
-  const cup1 = createVoxelBox(0.1, 0.12, 0.1, '#38bdf8');
-  cup1.position.set(0.35, 1.04, 0.2);
-  const cup2 = createVoxelBox(0.1, 0.12, 0.1, '#f472b6');
-  cup2.position.set(0.35, 1.04, 0.45);
-
-  // Microwave Oven
-  const microwave = createVoxelBox(0.55, 0.35, 0.5, '#475569');
-  microwave.position.set(0.1, 1.15, 0.85);
-  const microScreen = createVoxelBox(0.15, 0.08, 0.02, '#22c55e', { emissive: '#22c55e', emissiveIntensity: 0.8 });
-  microScreen.position.set(0.25, 1.22, 0.58);
-
-  kitchenGroup.add(counterBase, counterTop, espressoMachine, portafilter, cup1, cup2, microwave, microScreen);
-  roomGroup.add(kitchenGroup);
-
-  // Office Refrigerator with sticky memos
-  const fridge = new THREE.Group();
-  fridge.position.set(-roomWidth / 2 + 1.1, 0, -2.0);
-  const fridgeBody = createVoxelBox(1.0, 2.3, 0.9, '#cbd5e1', { metalness: 0.8, roughness: 0.3 });
-  fridgeBody.position.set(0, 1.15, 0);
-  const fridgeHandle = createVoxelBox(0.06, 0.8, 0.06, '#334155');
-  fridgeHandle.position.set(0.52, 1.2, 0.25);
-  const magnet1 = createVoxelBox(0.02, 0.12, 0.14, '#ef4444');
-  magnet1.position.set(0.51, 1.6, -0.15);
-  const magnet2 = createVoxelBox(0.02, 0.14, 0.12, '#3b82f6');
-  magnet2.position.set(0.51, 1.35, -0.1);
-  fridge.add(fridgeBody, fridgeHandle, magnet1, magnet2);
-  roomGroup.add(fridge);
-
-  // Water Cooler with Blue Bottle
-  const coolerGroup = new THREE.Group();
-  coolerGroup.name = 'hotspot_cooler';
-  coolerGroup.userData = { hotspot: 'cooler' };
-  coolerGroup.position.set(-roomWidth / 2 + 1.1, 0, -0.6);
-  const coolerBase = createVoxelBox(0.55, 1.1, 0.55, '#ffffff');
-  coolerBase.position.set(0, 0.55, 0);
-  const jug = createVoxelBox(0.48, 0.65, 0.48, '#0284c7', {
-    emissive: '#38bdf8',
-    emissiveIntensity: 0.6,
-    transparent: true,
-    opacity: 0.85,
-  });
-  jug.position.set(0, 1.45, 0);
-  coolerGroup.add(coolerBase, jug);
-  roomGroup.add(coolerGroup);
-
-  // 8. Office Multi-Function Heavy-Duty Printer & Copier Station (Left Front)
-  const printerGroup = new THREE.Group();
-  printerGroup.name = 'hotspot_printer';
-  printerGroup.userData = { hotspot: 'printer' };
-  printerGroup.position.set(-roomWidth / 2 + 1.3, 0, 2.4);
-
-  const printBody = createVoxelBox(1.2, 1.3, 1.1, '#e2e8f0');
-  printBody.position.set(0, 0.65, 0);
-  const docFeeder = createVoxelBox(0.9, 0.25, 0.8, '#334155');
-  docFeeder.position.set(0, 1.4, 0);
-  const outTray = createVoxelBox(0.6, 0.04, 0.5, '#475569');
-  outTray.position.set(0.6, 0.95, 0);
-  const statusLed = createVoxelBox(0.06, 0.06, 0.04, '#22c55e', { emissive: '#22c55e', emissiveIntensity: 0.9 });
-  statusLed.position.set(0.4, 1.35, -0.45);
-
-  // Paper Shredder bin next to printer
-  const shredder = createVoxelBox(0.45, 0.7, 0.45, '#334155');
-  shredder.position.set(0, 0.35, 1.1);
-
-  printerGroup.add(printBody, docFeeder, outTray, statusLed, shredder);
-  roomGroup.add(printerGroup);
-
-  // 9. Steel Document Archive Shelves & Gutenberg Bookshelf (Corner)
-  const shelfGroup = new THREE.Group();
-  shelfGroup.name = 'hotspot_bookshelf';
-  shelfGroup.userData = { hotspot: 'bookshelf' };
-  shelfGroup.position.set(-roomWidth / 2 + 1.2, 0, 4.8);
-  const shelfFrame = createVoxelBox(1.1, 2.8, 1.8, '#334155');
-  shelfFrame.position.set(0, 1.4, 0);
-  shelfGroup.add(shelfFrame);
-
-  const binderColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
-  for (let s = 0; s < 3; s++) {
-    for (let b = 0; b < 4; b++) {
-      const binder = createVoxelBox(0.55, 0.45, 0.18, binderColors[(s * 4 + b) % binderColors.length]);
-      binder.position.set(0.32, 0.5 + s * 0.8, -0.6 + b * 0.4);
-      shelfGroup.add(binder);
-    }
-  }
-  roomGroup.add(shelfGroup);
-
-  // 10. Office Break Lounge Couch & Coffee Table (Front Center)
-  const couch = new THREE.Group();
-  couch.position.set(0.5, 0, 5.2);
-  const couchBase = createVoxelBox(2.8, 0.45, 1.2, '#3b82f6');
-  couchBase.position.set(0, 0.225, 0);
-  const couchBack = createVoxelBox(2.8, 0.8, 0.3, '#1d4ed8');
-  couchBack.position.set(0, 0.65, 0.45);
-  const pillowL = createVoxelBox(0.45, 0.35, 0.2, '#fbbf24');
-  pillowL.position.set(-0.9, 0.55, 0.3);
-  pillowL.rotation.y = 0.25;
-  const pillowR = createVoxelBox(0.45, 0.35, 0.2, '#38bdf8');
-  pillowR.position.set(0.9, 0.55, 0.3);
-  pillowR.rotation.y = -0.25;
-  couch.add(couchBase, couchBack, pillowL, pillowR);
-  roomGroup.add(couch);
-
-  // Low Modern Coffee Table with Donut Box
-  const coffeeTable = createVoxelBox(1.5, 0.35, 0.8, '#1e293b');
-  coffeeTable.position.set(0.5, 0.175, 3.8);
-  const donutBox = createVoxelBox(0.35, 0.08, 0.35, '#f43f5e');
-  donutBox.position.set(0.5, 0.38, 3.8);
-  roomGroup.add(coffeeTable, donutBox);
-
-  // 11. Wastebasket Basketball Hoop Station (Fun Office Mini-Game)
-  const trashBin = createVoxelBox(0.55, 0.6, 0.55, '#64748b');
-  trashBin.position.set(3.8, 0.3, 3.8);
-  const hoopRing = createVoxelBox(0.65, 0.06, 0.65, '#f97316');
-  hoopRing.position.set(3.8, 0.62, 3.8);
-  roomGroup.add(trashBin, hoopRing);
-
-  // 12. Office Biophilic Planters (Fiddle Leaf Fig Tree & Snake Plants)
-  const treePot = createVoxelBox(0.9, 0.8, 0.9, '#ffffff');
-  treePot.position.set(roomWidth / 2 - 1.2, 0.4, 5.0);
-  const trunk = createVoxelBox(0.18, 1.8, 0.18, '#78350f');
-  trunk.position.set(roomWidth / 2 - 1.2, 1.5, 5.0);
-  const treeLeaves = createVoxelBox(1.4, 1.6, 1.4, '#16a34a');
-  treeLeaves.position.set(roomWidth / 2 - 1.2, 2.5, 5.0);
-  roomGroup.add(treePot, trunk, treeLeaves);
-
-  // 13. Tech Office Cubicle Dividers (Acoustic Felt Partitions between Desks)
-  const cubicleGroup = new THREE.Group();
-  const dividerColor = '#3b82f6'; // Clean tech blue acoustic screen
-
-  // Row 1 acoustic dividers between desks (z = -0.9, x at -2.6, 0.0, 2.6)
-  [-2.6, 0.0, 2.6].forEach((cx) => {
-    const divPanel = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
-    divPanel.position.set(cx, 0.6, -0.9);
-    const divCap = createVoxelBox(0.12, 0.04, 1.42, '#1e293b', { metalness: 0.8 });
-    divCap.position.set(cx, 1.22, -0.9);
-    cubicleGroup.add(divPanel, divCap);
-  });
-
-  // Row 2 acoustic dividers between desks (z = 2.2, x at -2.6, 0.0, 2.6)
-  [-2.6, 0.0, 2.6].forEach((cx) => {
-    const divPanel = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
-    divPanel.position.set(cx, 0.6, 2.2);
-    const divCap = createVoxelBox(0.12, 0.04, 1.42, '#1e293b', { metalness: 0.8 });
-    divCap.position.set(cx, 1.22, 2.2);
-    cubicleGroup.add(divPanel, divCap);
-  });
-
-  // Center spine modesty divider between Row 1 and Row 2 at z = 0.65
-  const spineDivider = createVoxelBox(10.5, 1.1, 0.08, '#1e293b', { roughness: 0.7 });
-  spineDivider.position.set(0, 0.55, 0.65);
-  cubicleGroup.add(spineDivider);
-
-  roomGroup.add(cubicleGroup);
-
-  // 14. Exit Door to Hallway Corridor (Front-Right Corner Entrance)
+// -------------------------------------------------------------
+// 3D Voxel Exit Door to Hallway Corridor
+// -------------------------------------------------------------
+function buildThemedExitDoor(theme: CoWorkingRoom['theme']): THREE.Group {
   const exitDoorGroup = new THREE.Group();
   exitDoorGroup.name = 'hotspot_exit_door';
   exitDoorGroup.userData = { hotspot: 'exit_door' };
   exitDoorGroup.position.set(6.8, 0, 8.2);
 
-  // Sturdy Architectural Wood Door Frame
-  const doorFrameL = createVoxelBox(0.2, 3.8, 0.25, '#334155');
+  let frameColor = '#334155';
+  let doorWoodColor = '#78350f';
+  let signGlowColor = '#22c55e';
+  if (theme === 'tea_loft') {
+    frameColor = '#5c2c16';
+    doorWoodColor = '#92400e';
+    signGlowColor = '#facc15';
+  } else if (theme === 'arcade') {
+    frameColor = '#0f172a';
+    doorWoodColor = '#312e81';
+    signGlowColor = '#ec4899';
+  } else if (theme === 'treehouse') {
+    frameColor = '#451a03';
+    doorWoodColor = '#78350f';
+    signGlowColor = '#84cc16';
+  } else if (theme === 'greenhouse') {
+    frameColor = '#14532d';
+    doorWoodColor = '#166534';
+    signGlowColor = '#4ade80';
+  }
+
+  // Sturdy Architectural Door Frame
+  const doorFrameL = createVoxelBox(0.2, 3.8, 0.25, frameColor);
   doorFrameL.position.set(-1.05, 1.9, 0);
-  const doorFrameR = createVoxelBox(0.2, 3.8, 0.25, '#334155');
+  const doorFrameR = createVoxelBox(0.2, 3.8, 0.25, frameColor);
   doorFrameR.position.set(1.05, 1.9, 0);
-  const doorFrameT = createVoxelBox(2.3, 0.25, 0.25, '#334155');
+  const doorFrameT = createVoxelBox(2.3, 0.25, 0.25, frameColor);
   doorFrameT.position.set(0, 3.8, 0);
   const doorThreshold = createVoxelBox(2.3, 0.06, 0.35, '#64748b');
   doorThreshold.position.set(0, 0.03, 0);
 
-  // Illuminated Glowing Green "EXIT / HALLWAY" Overhead Sign
-  const exitSignHousing = createVoxelBox(1.3, 0.42, 0.14, '#14532d', {
-    emissive: '#16a34a',
-    emissiveIntensity: 0.9,
-  });
+  // Illuminated Glowing Overhead Sign
+  const exitSignHousing = createVoxelBox(1.3, 0.42, 0.14, '#0f172a');
   exitSignHousing.position.set(0, 4.15, 0.05);
-  const exitSignGlow = createVoxelBox(1.1, 0.28, 0.04, '#ffffff', {
-    emissive: '#22c55e',
+  const exitSignGlow = createVoxelBox(1.1, 0.28, 0.04, signGlowColor, {
+    emissive: signGlowColor,
     emissiveIntensity: 1.2,
   });
   exitSignGlow.position.set(0, 4.15, 0.13);
 
-  // Warm Walnut Wood Door Panel (Slightly ajar inviting user into the hallway)
+  // Door Panel slightly ajar
   const doorPanel = new THREE.Group();
   doorPanel.position.set(-0.95, 0, 0);
-  doorPanel.rotation.y = -0.35; // Ajar opening outward toward hallway
+  doorPanel.rotation.y = -0.35;
 
-  const doorWood = createVoxelBox(1.85, 3.5, 0.1, '#78350f', { roughness: 0.6 });
+  const doorWood = createVoxelBox(1.85, 3.5, 0.1, doorWoodColor, { roughness: 0.6 });
   doorWood.position.set(0.925, 1.75, 0);
 
-  // Frosted Glass Window Inset with warm hallway light glow
+  // Glass Window Inset with warm light glow
   const doorGlass = createVoxelBox(0.7, 1.4, 0.12, '#fef08a', {
     emissive: '#fde047',
     emissiveIntensity: 0.75,
@@ -1281,19 +993,19 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   });
   doorGlass.position.set(0.925, 2.3, 0);
 
-  // Polished Brass Door Handle & Lock Plate
+  // Brass Door Handle
   const doorKnob = createVoxelBox(0.12, 0.18, 0.18, '#facc15', { metalness: 0.9, roughness: 0.2 });
   doorKnob.position.set(1.65, 1.6, 0.06);
 
   doorPanel.add(doorWood, doorGlass, doorKnob);
 
-  // Welcome Doormat in front of the door
+  // Welcome Doormat
   const welcomeMat = createVoxelBox(2.2, 0.04, 1.3, '#1e293b', { roughness: 0.9 });
   welcomeMat.position.set(0, 0.02, -0.7);
   const matStripe = createVoxelBox(1.8, 0.05, 0.08, '#f59e0b');
   matStripe.position.set(0, 0.03, -0.7);
 
-  // Warm Hallway Sconce Light on the doorpost
+  // Wall Sconce Light
   const doorSconce = createVoxelBox(0.18, 0.35, 0.18, '#f59e0b', {
     emissive: '#f59e0b',
     emissiveIntensity: 1.0,
@@ -1313,15 +1025,568 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
     doorSconce
   );
 
-  roomGroup.add(exitDoorGroup);
+  return exitDoorGroup;
+}
 
-  // -------------------------------------------------------------
-  // Office Lighting Setup: Crisp, Bright, Beautiful Studio Fill
-  // -------------------------------------------------------------
+// -------------------------------------------------------------
+// 3D Voxel Multi-Themed Room Environment Builder
+// Fully supports all 9 Hallway Study Rooms with distinct themes!
+// -------------------------------------------------------------
+export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
+  roomGroup: THREE.Group;
+  lightGroup: THREE.Group;
+  updateLights: (tod: TimeOfDay) => void;
+  windowGlassMesh?: THREE.Mesh;
+} {
+  const roomGroup = new THREE.Group();
+  const lightGroup = new THREE.Group();
+
+  const theme = room?.theme || 'office';
+  const roomWidth = 20;
+  const roomDepth = 18;
+  const wallHeight = 5.2;
+
+  // Window glass reference for dynamic TOD syncing
+  let windowGlassMesh: THREE.Mesh | null = null;
+
+  // =============================================================
+  // 1. THEME: 'office' (Open-Plan Studio Office)
+  // =============================================================
+  if (theme === 'office') {
+    // Floor: Nordic Ash & Slate Carpet
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#cbd5e1');
+    floorBase.position.set(0, -0.15, 0);
+    floorBase.receiveShadow = true;
+    const carpet = createVoxelBox(14.5, 0.03, 10.5, '#475569', { roughness: 0.8 });
+    carpet.position.set(0, 0.015, 0.6);
+    carpet.receiveShadow = true;
+    const woodBorder = createVoxelBox(roomWidth - 0.4, 0.02, roomDepth - 0.4, '#d7c4a3', { roughness: 0.4 });
+    woodBorder.position.set(0, 0.005, 0);
+    roomGroup.add(floorBase, carpet, woodBorder);
+
+    // Walls: Bright Scandinavian Studio White
+    const wallColor = '#f1f5f9';
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, wallColor);
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, wallColor);
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    const baseboardB = createVoxelBox(roomWidth, 0.25, 0.35, '#334155');
+    baseboardB.position.set(0, 0.125, -roomDepth / 2);
+    const baseboardL = createVoxelBox(0.35, 0.25, roomDepth, '#334155');
+    baseboardL.position.set(-roomWidth / 2, 0.125, 0);
+    roomGroup.add(backWall, leftWall, baseboardB, baseboardL);
+
+    // Panoramic Skyline Windows
+    const windowFrame = createVoxelBox(6.5, 2.8, 0.2, '#1e293b');
+    windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
+    const windowGlass = createVoxelBox(6.3, 2.6, 0.05, '#38bdf8', {
+      emissive: '#7dd3fc',
+      emissiveIntensity: 0.85,
+      transparent: true,
+      opacity: 0.92,
+    });
+    windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
+    windowGlassMesh = windowGlass;
+    const mullionV1 = createVoxelBox(0.08, 2.6, 0.08, '#1e293b');
+    mullionV1.position.set(0.5, 2.8, -roomDepth / 2 + 0.18);
+    const mullionV2 = createVoxelBox(0.08, 2.6, 0.08, '#1e293b');
+    mullionV2.position.set(4.5, 2.8, -roomDepth / 2 + 0.18);
+    const mullionH = createVoxelBox(6.3, 0.08, 0.08, '#1e293b');
+    mullionH.position.set(2.5, 2.8, -roomDepth / 2 + 0.18);
+    roomGroup.add(windowFrame, windowGlass, mullionV1, mullionV2, mullionH);
+
+    // Glass Conference Partition on Right
+    const confRoom = new THREE.Group();
+    confRoom.position.set(roomWidth / 2 - 1.8, 0, 1.5);
+    const glassWall = createVoxelBox(0.1, wallHeight * 0.8, 6.5, '#bae6fd', {
+      emissive: '#bae6fd',
+      emissiveIntensity: 0.35,
+      transparent: true,
+      opacity: 0.4,
+    });
+    glassWall.position.set(-1.8, wallHeight * 0.4, 0);
+    const confTable = createVoxelBox(1.6, 0.1, 3.8, '#582c0e');
+    confTable.position.set(0, 0.75, 0);
+    confRoom.add(glassWall, confTable);
+    roomGroup.add(confRoom);
+
+    // Break Couch
+    const couch = createVoxelBox(2.8, 0.45, 1.2, '#3b82f6');
+    couch.position.set(0.5, 0.225, 5.2);
+    const coffeeTable = createVoxelBox(1.5, 0.35, 0.8, '#1e293b');
+    coffeeTable.position.set(0.5, 0.175, 3.8);
+    roomGroup.add(couch, coffeeTable);
+
+    // Fig Tree Planter
+    const treePot = createVoxelBox(0.9, 0.8, 0.9, '#ffffff');
+    treePot.position.set(roomWidth / 2 - 1.2, 0.4, 5.0);
+    const trunk = createVoxelBox(0.18, 1.8, 0.18, '#78350f');
+    trunk.position.set(roomWidth / 2 - 1.2, 1.5, 5.0);
+    const leaves = createVoxelBox(1.4, 1.6, 1.4, '#16a34a');
+    leaves.position.set(roomWidth / 2 - 1.2, 2.5, 5.0);
+    roomGroup.add(treePot, trunk, leaves);
+  }
+  // =============================================================
+  // 2. THEME: 'loft_office' (Sunset Tech Hub Office)
+  // =============================================================
+  else if (theme === 'loft_office') {
+    // Floor: Dark Walnut & Amber Geometric Rug
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#3f1d0b');
+    floorBase.position.set(0, -0.15, 0);
+    const rug = createVoxelBox(14.5, 0.03, 10.5, '#b45309', { roughness: 0.7 });
+    rug.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, rug);
+
+    // Back Wall: Industrial Exposed Terracotta Brick
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#7c2d12', { roughness: 0.9 });
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    // Brick decorative horizontal mortar stripes
+    for (let by = 0.5; by < wallHeight; by += 0.6) {
+      const stripe = createVoxelBox(roomWidth, 0.04, 0.32, '#431407');
+      stripe.position.set(0, by, -roomDepth / 2);
+      roomGroup.add(stripe);
+    }
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#1e293b');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    roomGroup.add(backWall, leftWall);
+
+    // Industrial Sunset Skyline Window
+    const windowFrame = createVoxelBox(6.5, 2.8, 0.2, '#0f172a');
+    windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
+    const windowGlass = createVoxelBox(6.3, 2.6, 0.05, '#f97316', {
+      emissive: '#ea580c',
+      emissiveIntensity: 0.9,
+      transparent: true,
+      opacity: 0.92,
+    });
+    windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
+    windowGlassMesh = windowGlass;
+    roomGroup.add(windowFrame, windowGlass);
+
+    // Server Rack Tower in Corner
+    const serverRack = createVoxelBox(1.2, 2.6, 1.2, '#0f172a');
+    serverRack.position.set(roomWidth / 2 - 1.5, 1.3, -roomDepth / 2 + 1.2);
+    const serverLed1 = createVoxelBox(0.04, 0.1, 0.8, '#22c55e', { emissive: '#22c55e', emissiveIntensity: 1.2 });
+    serverLed1.position.set(roomWidth / 2 - 2.12, 1.8, -roomDepth / 2 + 1.2);
+    const serverLed2 = createVoxelBox(0.04, 0.1, 0.8, '#38bdf8', { emissive: '#38bdf8', emissiveIntensity: 1.2 });
+    serverLed2.position.set(roomWidth / 2 - 2.12, 1.2, -roomDepth / 2 + 1.2);
+    roomGroup.add(serverRack, serverLed1, serverLed2);
+  }
+  // =============================================================
+  // 3. THEME: 'tech_hub' (Corner Office & Coffee Bar)
+  // =============================================================
+  else if (theme === 'tech_hub') {
+    // Floor: Herringbone Warm Oak & Cream Wool Rug
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#a16207');
+    floorBase.position.set(0, -0.15, 0);
+    const rug = createVoxelBox(14.5, 0.03, 10.5, '#fef3c7', { roughness: 0.8 });
+    rug.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, rug);
+
+    // Wall: Wood Acoustic Slats & Sage Green
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#1e3a29');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    for (let sx = -roomWidth / 2 + 0.5; sx < -1; sx += 0.4) {
+      const slat = createVoxelBox(0.18, wallHeight, 0.32, '#78350f');
+      slat.position.set(sx, wallHeight / 2, -roomDepth / 2);
+      roomGroup.add(slat);
+    }
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#1e3a29');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    roomGroup.add(backWall, leftWall);
+
+    // Neon "COFFEE & CODE" Sign
+    const neonSign = createVoxelBox(3.0, 0.6, 0.08, '#f59e0b', {
+      emissive: '#fbbf24',
+      emissiveIntensity: 1.2,
+    });
+    neonSign.position.set(-4.2, 4.4, -roomDepth / 2 + 0.18);
+    roomGroup.add(neonSign);
+
+    // Window
+    const windowFrame = createVoxelBox(6.5, 2.8, 0.2, '#78350f');
+    windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
+    const windowGlass = createVoxelBox(6.3, 2.6, 0.05, '#fef08a', {
+      emissive: '#facc15',
+      emissiveIntensity: 0.8,
+      transparent: true,
+      opacity: 0.9,
+    });
+    windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
+    windowGlassMesh = windowGlass;
+    roomGroup.add(windowFrame, windowGlass);
+  }
+  // =============================================================
+  // 4. THEME: 'tea_loft' (Kyoto Tea Loft)
+  // =============================================================
+  else if (theme === 'tea_loft') {
+    // Floor: Traditional Japanese Woven Tatami Mats
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#451a03');
+    floorBase.position.set(0, -0.15, 0);
+    const tatami = createVoxelBox(14.5, 0.03, 10.5, '#d4c59a', { roughness: 0.9 });
+    tatami.position.set(0, 0.015, 0.6);
+    // Tatami mat borders
+    const border1 = createVoxelBox(14.5, 0.035, 0.12, '#5c2c16');
+    border1.position.set(0, 0.02, 0.6);
+    const border2 = createVoxelBox(0.12, 0.035, 10.5, '#5c2c16');
+    border2.position.set(0, 0.02, 0.6);
+    roomGroup.add(floorBase, tatami, border1, border2);
+
+    // Walls: Shoji Paper Screen Lattice
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#fef3c7');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#fef3c7');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    // Wooden Shoji Grid Frames
+    for (let gy = 0.5; gy < wallHeight; gy += 1.0) {
+      const beam = createVoxelBox(roomWidth, 0.08, 0.32, '#5c2c16');
+      beam.position.set(0, gy, -roomDepth / 2);
+      roomGroup.add(beam);
+    }
+    roomGroup.add(backWall, leftWall);
+
+    // Zen Rock Garden in Right Corner
+    const rockBed = createVoxelBox(4.5, 0.08, 4.5, '#f1f5f9', { roughness: 0.95 });
+    rockBed.position.set(roomWidth / 2 - 2.8, 0.04, -roomDepth / 2 + 2.8);
+    const rock1 = createVoxelBox(0.9, 0.6, 0.8, '#64748b');
+    rock1.position.set(roomWidth / 2 - 2.6, 0.3, -roomDepth / 2 + 2.6);
+    const rock2 = createVoxelBox(0.6, 0.4, 0.5, '#475569');
+    rock2.position.set(roomWidth / 2 - 3.4, 0.2, -roomDepth / 2 + 3.2);
+    // Bamboo Water Spout
+    const spout = createVoxelBox(0.1, 0.6, 0.6, '#84cc16');
+    spout.position.set(roomWidth / 2 - 2.0, 0.5, -roomDepth / 2 + 2.0);
+    spout.rotation.x = -0.3;
+    roomGroup.add(rockBed, rock1, rock2, spout);
+
+    // Japanese Bonsai Table
+    const bonsaiTable = createVoxelBox(1.2, 0.5, 0.8, '#451a03');
+    bonsaiTable.position.set(roomWidth / 2 - 1.5, 0.25, 4.5);
+    const bonsaiTrunk = createVoxelBox(0.14, 0.5, 0.14, '#78350f');
+    bonsaiTrunk.position.set(roomWidth / 2 - 1.5, 0.7, 4.5);
+    const bonsaiLeaves = createVoxelBox(0.65, 0.45, 0.65, '#15803d');
+    bonsaiLeaves.position.set(roomWidth / 2 - 1.5, 1.05, 4.5);
+    roomGroup.add(bonsaiTable, bonsaiTrunk, bonsaiLeaves);
+  }
+  // =============================================================
+  // 5. THEME: 'cafe' (Rainy Window Espresso Café)
+  // =============================================================
+  else if (theme === 'cafe') {
+    // Floor: Dark Mahogany & Burgundy Runner
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#271406');
+    floorBase.position.set(0, -0.15, 0);
+    const rug = createVoxelBox(14.5, 0.03, 10.5, '#881337', { roughness: 0.8 });
+    rug.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, rug);
+
+    // Walls: Cozy Parisian Navy Blue
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#0f172a');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#0f172a');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    const wainscot = createVoxelBox(roomWidth, 1.4, 0.32, '#451a03');
+    wainscot.position.set(0, 0.7, -roomDepth / 2);
+    roomGroup.add(backWall, leftWall, wainscot);
+
+    // Rainy Overcast Window with Blue Misty Glow
+    const windowFrame = createVoxelBox(6.5, 2.8, 0.2, '#451a03');
+    windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
+    const windowGlass = createVoxelBox(6.3, 2.6, 0.05, '#0284c7', {
+      emissive: '#38bdf8',
+      emissiveIntensity: 0.65,
+      transparent: true,
+      opacity: 0.9,
+    });
+    windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
+    windowGlassMesh = windowGlass;
+    roomGroup.add(windowFrame, windowGlass);
+
+    // Warm Fireplace in Corner
+    const fireplace = createVoxelBox(2.2, 2.2, 1.2, '#78350f');
+    fireplace.position.set(roomWidth / 2 - 1.8, 1.1, -roomDepth / 2 + 1.2);
+    const fireHearth = createVoxelBox(1.2, 1.0, 0.8, '#0f172a');
+    fireHearth.position.set(roomWidth / 2 - 1.8, 0.7, -roomDepth / 2 + 1.3);
+    const fireGlow = createVoxelBox(0.8, 0.4, 0.5, '#ea580c', { emissive: '#f97316', emissiveIntensity: 1.4 });
+    fireGlow.position.set(roomWidth / 2 - 1.8, 0.5, -roomDepth / 2 + 1.3);
+    roomGroup.add(fireplace, fireHearth, fireGlow);
+  }
+  // =============================================================
+  // 6. THEME: 'treehouse' (Forest Canopy Treehouse)
+  // =============================================================
+  else if (theme === 'treehouse') {
+    // Floor: Rustic Oak Planks & Moss Rug
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#78350f');
+    floorBase.position.set(0, -0.15, 0);
+    const mossRug = createVoxelBox(14.5, 0.03, 10.5, '#15803d', { roughness: 0.9 });
+    mossRug.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, mossRug);
+
+    // Walls: Log Timber Walls
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#854d0e');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#854d0e');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    roomGroup.add(backWall, leftWall);
+
+    // Giant Curving Tree Trunk Pillars
+    const trunk1 = createVoxelBox(1.4, wallHeight + 1, 1.4, '#451a03');
+    trunk1.position.set(roomWidth / 2 - 2.5, wallHeight / 2, -roomDepth / 2 + 2.5);
+    const trunk2 = createVoxelBox(1.2, wallHeight + 1, 1.2, '#451a03');
+    trunk2.position.set(-roomWidth / 2 + 2.5, wallHeight / 2, roomDepth / 2 - 2.5);
+    const branch = createVoxelBox(5.0, 0.5, 0.5, '#5c2c16');
+    branch.position.set(roomWidth / 2 - 4.5, wallHeight - 0.5, -roomDepth / 2 + 2.5);
+    roomGroup.add(trunk1, trunk2, branch);
+
+    // Forest Open Balcony View
+    const windowFrame = createVoxelBox(7.0, 3.2, 0.2, '#451a03');
+    windowFrame.position.set(2.5, 2.8, -roomDepth / 2 + 0.1);
+    const windowGlass = createVoxelBox(6.8, 3.0, 0.05, '#16a34a', {
+      emissive: '#4ade80',
+      emissiveIntensity: 0.55,
+      transparent: true,
+      opacity: 0.85,
+    });
+    windowGlass.position.set(2.5, 2.8, -roomDepth / 2 + 0.15);
+    windowGlassMesh = windowGlass;
+    roomGroup.add(windowFrame, windowGlass);
+  }
+  // =============================================================
+  // 7. THEME: 'greenhouse' (Botanical Conservatory)
+  // =============================================================
+  else if (theme === 'greenhouse') {
+    // Floor: Flagstone Cobblestone & Terra Cotta Path
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#64748b');
+    floorBase.position.set(0, -0.15, 0);
+    const path = createVoxelBox(14.5, 0.03, 10.5, '#b45309', { roughness: 0.85 });
+    path.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, path);
+
+    // Walls: Victorian Arched Glasshouse Wall
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#14532d');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#14532d');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    // Glass Panes
+    const glassPane = createVoxelBox(roomWidth - 2, 3.2, 0.06, '#86efac', {
+      emissive: '#4ade80',
+      emissiveIntensity: 0.45,
+      transparent: true,
+      opacity: 0.6,
+    });
+    glassPane.position.set(0, 2.8, -roomDepth / 2 + 0.16);
+    roomGroup.add(backWall, leftWall, glassPane);
+
+    // Abundant Tropical Plants & Monstera in Corners
+    for (let px = -6; px <= 6; px += 4) {
+      const pot = createVoxelBox(0.7, 0.6, 0.7, '#ea580c');
+      pot.position.set(px, 0.3, 5.0);
+      const plantLeaves = createVoxelBox(1.1, 1.2, 1.1, '#16a34a');
+      plantLeaves.position.set(px, 1.1, 5.0);
+      roomGroup.add(pot, plantLeaves);
+    }
+  }
+  // =============================================================
+  // 8. THEME: 'lilypad' (Starlight Lotus Pond)
+  // =============================================================
+  else if (theme === 'lilypad') {
+    // Floor: Dark Timber Floating Dock surrounded by Crystal Water
+    const waterBase = createVoxelBox(roomWidth, 0.25, roomDepth, '#0284c7', {
+      emissive: '#0369a1',
+      emissiveIntensity: 0.6,
+    });
+    waterBase.position.set(0, -0.15, 0);
+    const dock = createVoxelBox(14.5, 0.06, 10.5, '#1e1b4b', { roughness: 0.6 });
+    dock.position.set(0, 0.02, 0.6);
+    roomGroup.add(waterBase, dock);
+
+    // Surrounding Floating Lotus Blossoms on water
+    const lotusPositions = [
+      [-8.0, -6.5], [-8.0, 0.0], [-8.0, 6.5],
+      [8.0, -6.5], [8.0, 0.0], [8.0, 6.5],
+      [0.0, 7.5], [-4.0, 7.5], [4.0, 7.5],
+    ];
+    lotusPositions.forEach(([lx, lz]) => {
+      const pad = createVoxelBox(1.0, 0.02, 1.0, '#10b981');
+      pad.position.set(lx, 0.01, lz);
+      const flower = createVoxelBox(0.4, 0.25, 0.4, '#f472b6', {
+        emissive: '#ec4899',
+        emissiveIntensity: 0.8,
+      });
+      flower.position.set(lx, 0.15, lz);
+      roomGroup.add(pad, flower);
+    });
+
+    // Night Backdrop
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#090514');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#090514');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    // Glowing Moon in Sky
+    const moon = createVoxelBox(1.6, 1.6, 0.08, '#fef08a', {
+      emissive: '#fef08a',
+      emissiveIntensity: 1.5,
+    });
+    moon.position.set(4.0, 4.0, -roomDepth / 2 + 0.18);
+    roomGroup.add(backWall, leftWall, moon);
+  }
+  // =============================================================
+  // 9. THEME: 'arcade' (Retro Pixel Study Den)
+  // =============================================================
+  else if (theme === 'arcade') {
+    // Floor: Dark Synthwave with Cyan & Magenta Neon Grid Matrix
+    const floorBase = createVoxelBox(roomWidth, 0.3, roomDepth, '#0a0518');
+    floorBase.position.set(0, -0.15, 0);
+    const carpet = createVoxelBox(14.5, 0.03, 10.5, '#1e1035');
+    carpet.position.set(0, 0.015, 0.6);
+    roomGroup.add(floorBase, carpet);
+
+    // Neon Grid Lines on Floor
+    for (let gx = -6; gx <= 6; gx += 2) {
+      const lineX = createVoxelBox(0.04, 0.035, 10.5, '#06b6d4', { emissive: '#06b6d4', emissiveIntensity: 1.2 });
+      lineX.position.set(gx, 0.02, 0.6);
+      roomGroup.add(lineX);
+    }
+    for (let gz = -4; gz <= 5; gz += 2) {
+      const lineZ = createVoxelBox(14.5, 0.035, 0.04, '#ec4899', { emissive: '#ec4899', emissiveIntensity: 1.2 });
+      lineZ.position.set(0, 0.02, gz);
+      roomGroup.add(lineZ);
+    }
+
+    // Walls: Midnight Cyberpunk Purple
+    const backWall = createVoxelBox(roomWidth, wallHeight, 0.3, '#15092a');
+    backWall.position.set(0, wallHeight / 2, -roomDepth / 2);
+    const leftWall = createVoxelBox(0.3, wallHeight, roomDepth, '#15092a');
+    leftWall.position.set(-roomWidth / 2, wallHeight / 2, 0);
+    roomGroup.add(backWall, leftWall);
+
+    // Neon Wall Art: Pixel Heart & Level Up
+    const heart = createVoxelBox(0.9, 0.9, 0.08, '#f43f5e', { emissive: '#f43f5e', emissiveIntensity: 1.5 });
+    heart.position.set(-1.0, 4.2, -roomDepth / 2 + 0.18);
+    const levelUp = createVoxelBox(2.2, 0.5, 0.08, '#06b6d4', { emissive: '#06b6d4', emissiveIntensity: 1.5 });
+    levelUp.position.set(3.5, 4.2, -roomDepth / 2 + 0.18);
+    roomGroup.add(heart, levelUp);
+
+    // Retro Arcade Machine Cabinet 1: Pac-Voxel
+    const arcade1 = new THREE.Group();
+    arcade1.position.set(roomWidth / 2 - 1.8, 0, -roomDepth / 2 + 2.0);
+    const cab1 = createVoxelBox(1.1, 2.6, 1.2, '#eab308');
+    cab1.position.set(0, 1.3, 0);
+    const crt1 = createVoxelBox(0.7, 0.6, 0.08, '#0f172a', { emissive: '#38bdf8', emissiveIntensity: 1.0 });
+    crt1.position.set(-0.54, 1.5, 0);
+    crt1.rotation.y = Math.PI / 2;
+    const marquee1 = createVoxelBox(0.8, 0.25, 0.08, '#ffffff', { emissive: '#facc15', emissiveIntensity: 1.5 });
+    marquee1.position.set(-0.54, 2.35, 0);
+    marquee1.rotation.y = Math.PI / 2;
+    arcade1.add(cab1, crt1, marquee1);
+    roomGroup.add(arcade1);
+
+    // Retro Arcade Machine Cabinet 2: Space Invaders
+    const arcade2 = new THREE.Group();
+    arcade2.position.set(roomWidth / 2 - 1.8, 0, -roomDepth / 2 + 3.8);
+    const cab2 = createVoxelBox(1.1, 2.6, 1.2, '#06b6d4');
+    cab2.position.set(0, 1.3, 0);
+    const crt2 = createVoxelBox(0.7, 0.6, 0.08, '#0f172a', { emissive: '#22c55e', emissiveIntensity: 1.0 });
+    crt2.position.set(-0.54, 1.5, 0);
+    crt2.rotation.y = Math.PI / 2;
+    const marquee2 = createVoxelBox(0.8, 0.25, 0.08, '#ffffff', { emissive: '#06b6d4', emissiveIntensity: 1.5 });
+    marquee2.position.set(-0.54, 2.35, 0);
+    marquee2.rotation.y = Math.PI / 2;
+    arcade2.add(cab2, crt2, marquee2);
+    roomGroup.add(arcade2);
+  }
+
+  // =============================================================
+  // COMMON INTERACTIVES (Present across all room themes)
+  // =============================================================
+  // 1. Pristine Whiteboard
+  const whiteboardObj = buildThemedWhiteboard(theme);
+  roomGroup.add(whiteboardObj);
+
+  // 2. Hallway Exit Door
+  const exitDoorObj = buildThemedExitDoor(theme);
+  roomGroup.add(exitDoorObj);
+
+  // 3. Kitchenette / Beverage Hotspot on Left Wall
+  const kitchenGroup = new THREE.Group();
+  kitchenGroup.name = 'hotspot_espresso';
+  kitchenGroup.userData = { hotspot: 'espresso' };
+  kitchenGroup.position.set(-roomWidth / 2 + 1.2, 0, -4.2);
+  const counterBase = createVoxelBox(1.5, 0.9, 2.8, '#334155');
+  counterBase.position.set(0, 0.45, 0);
+  const counterTop = createVoxelBox(1.6, 0.08, 2.9, '#f8fafc', { roughness: 0.2 });
+  counterTop.position.set(0, 0.94, 0);
+  const espressoMachine = createVoxelBox(0.65, 0.58, 0.65, '#e2e8f0', { metalness: 0.8, roughness: 0.2 });
+  espressoMachine.position.set(0.1, 1.28, -0.6);
+  kitchenGroup.add(counterBase, counterTop, espressoMachine);
+  roomGroup.add(kitchenGroup);
+
+  // 4. Water Cooler / Hydration Hotspot
+  const coolerGroup = new THREE.Group();
+  coolerGroup.name = 'hotspot_cooler';
+  coolerGroup.userData = { hotspot: 'cooler' };
+  coolerGroup.position.set(-roomWidth / 2 + 1.1, 0, -0.6);
+  const coolerBase = createVoxelBox(0.55, 1.1, 0.55, '#ffffff');
+  coolerBase.position.set(0, 0.55, 0);
+  const jug = createVoxelBox(0.48, 0.65, 0.48, '#0284c7', {
+    emissive: '#38bdf8',
+    emissiveIntensity: 0.6,
+    transparent: true,
+    opacity: 0.85,
+  });
+  jug.position.set(0, 1.45, 0);
+  coolerGroup.add(coolerBase, jug);
+  roomGroup.add(coolerGroup);
+
+  // 5. Copier & Print Station Hotspot
+  const printerGroup = new THREE.Group();
+  printerGroup.name = 'hotspot_printer';
+  printerGroup.userData = { hotspot: 'printer' };
+  printerGroup.position.set(-roomWidth / 2 + 1.3, 0, 2.4);
+  const printBody = createVoxelBox(1.2, 1.3, 1.1, '#e2e8f0');
+  printBody.position.set(0, 0.65, 0);
+  const docFeeder = createVoxelBox(0.9, 0.25, 0.8, '#334155');
+  docFeeder.position.set(0, 1.4, 0);
+  printerGroup.add(printBody, docFeeder);
+  roomGroup.add(printerGroup);
+
+  // 6. Gutenberg Bookshelf & Archive Hotspot
+  const shelfGroup = new THREE.Group();
+  shelfGroup.name = 'hotspot_bookshelf';
+  shelfGroup.userData = { hotspot: 'bookshelf' };
+  shelfGroup.position.set(-roomWidth / 2 + 1.2, 0, 4.8);
+  const shelfFrame = createVoxelBox(1.1, 2.8, 1.8, '#334155');
+  shelfFrame.position.set(0, 1.4, 0);
+  shelfGroup.add(shelfFrame);
+  const binderColors = ['#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6'];
+  for (let s = 0; s < 3; s++) {
+    for (let b = 0; b < 4; b++) {
+      const binder = createVoxelBox(0.55, 0.45, 0.18, binderColors[(s * 4 + b) % binderColors.length]);
+      binder.position.set(0.32, 0.5 + s * 0.8, -0.6 + b * 0.4);
+      shelfGroup.add(binder);
+    }
+  }
+  roomGroup.add(shelfGroup);
+
+  // 7. Workstation Cubicle Partition Dividers
+  const cubicleGroup = new THREE.Group();
+  const dividerColor = theme === 'arcade' ? '#8b5cf6' : theme === 'tea_loft' ? '#78350f' : '#3b82f6';
+  [-2.6, 0.0, 2.6].forEach((cx) => {
+    const divPanel1 = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
+    divPanel1.position.set(cx, 0.6, -0.9);
+    const divPanel2 = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
+    divPanel2.position.set(cx, 0.6, 2.2);
+    cubicleGroup.add(divPanel1, divPanel2);
+  });
+  const spineDivider = createVoxelBox(10.5, 1.1, 0.08, '#1e293b', { roughness: 0.7 });
+  spineDivider.position.set(0, 0.55, 0.65);
+  cubicleGroup.add(spineDivider);
+  roomGroup.add(cubicleGroup);
+
+  // =============================================================
+  // LIGHTING SETUP
+  // =============================================================
   const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
   lightGroup.add(ambientLight);
 
-  // Hemispheric Soft Fill for natural bounce
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc7d2fe, 0.75);
   lightGroup.add(hemiLight);
 
@@ -1333,7 +1598,6 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   dirLight.shadow.bias = -0.0008;
   lightGroup.add(dirLight);
 
-  // Bright Overhead Daylight Center Point Light
   const ceilingPendant = new THREE.PointLight(0xfffaed, 1.6, 22);
   ceilingPendant.position.set(0, 4.2, 0);
   ceilingPendant.castShadow = true;
@@ -1349,12 +1613,14 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
       dirLight.color.setHex(0xf97316);
       dirLight.intensity = 1.8;
       ceilingPendant.color.setHex(0xfeb272);
-      windowGlass.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#ea580c'),
-        emissive: new THREE.Color('#ea580c'),
-        emissiveIntensity: 0.9,
-        flatShading: true,
-      });
+      if (windowGlassMesh) {
+        windowGlassMesh.material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#ea580c'),
+          emissive: new THREE.Color('#ea580c'),
+          emissiveIntensity: 0.9,
+          flatShading: true,
+        });
+      }
     } else if (tod === 'night') {
       ambientLight.color.setHex(0xc7d2fe);
       ambientLight.intensity = 0.85;
@@ -1364,13 +1630,15 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
       dirLight.color.setHex(0xa5b4fc);
       dirLight.intensity = 1.1;
       ceilingPendant.color.setHex(0xffedd5);
-      ceilingPendant.intensity = 2.0; // Interior lights turn ON bright at night
-      windowGlass.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#1e1b4b'),
-        emissive: new THREE.Color('#312e81'),
-        emissiveIntensity: 0.65,
-        flatShading: true,
-      });
+      ceilingPendant.intensity = 2.0;
+      if (windowGlassMesh) {
+        windowGlassMesh.material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#1e1b4b'),
+          emissive: new THREE.Color('#312e81'),
+          emissiveIntensity: 0.65,
+          flatShading: true,
+        });
+      }
     } else if (tod === 'rainy') {
       ambientLight.color.setHex(0xe2e8f0);
       ambientLight.intensity = 0.95;
@@ -1380,14 +1648,15 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
       dirLight.color.setHex(0x94a3b8);
       dirLight.intensity = 1.2;
       ceilingPendant.color.setHex(0xfef08a);
-      windowGlass.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#0284c7'),
-        emissive: new THREE.Color('#38bdf8'),
-        emissiveIntensity: 0.6,
-        flatShading: true,
-      });
+      if (windowGlassMesh) {
+        windowGlassMesh.material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#0284c7'),
+          emissive: new THREE.Color('#38bdf8'),
+          emissiveIntensity: 0.6,
+          flatShading: true,
+        });
+      }
     } else {
-      // Day (Bright, Sunny, Pristine Office)
       ambientLight.color.setHex(0xffffff);
       ambientLight.intensity = 1.25;
       hemiLight.color.setHex(0xffffff);
@@ -1397,16 +1666,18 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
       dirLight.intensity = 1.75;
       ceilingPendant.color.setHex(0xfffaed);
       ceilingPendant.intensity = 1.6;
-      windowGlass.material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color('#38bdf8'),
-        emissive: new THREE.Color('#7dd3fc'),
-        emissiveIntensity: 0.85,
-        flatShading: true,
-      });
+      if (windowGlassMesh) {
+        windowGlassMesh.material = new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#38bdf8'),
+          emissive: new THREE.Color('#7dd3fc'),
+          emissiveIntensity: 0.85,
+          flatShading: true,
+        });
+      }
     }
   };
 
   updateLights(timeOfDay);
 
-  return { roomGroup, lightGroup, updateLights };
+  return { roomGroup, lightGroup, updateLights, windowGlassMesh };
 }

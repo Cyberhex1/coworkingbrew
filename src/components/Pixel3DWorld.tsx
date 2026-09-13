@@ -522,13 +522,13 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           },
         };
       }
-      // 2. Blackboard & Room Directory (x: -4.2, z: -8.8)
+      // 2. Sprint Whiteboard (x: -4.2, z: -8.8)
       else if (Math.hypot(uX - (-4.2), uZ - (-8.8)) < 3.2) {
         detectedTrigger = {
-          id: 'blackboard',
-          label: 'Open Hallway & Room Wall',
-          icon: '🚪',
-          action: handleOpenHallway,
+          id: 'sprint_board',
+          label: 'Open Sprint Kanban Whiteboard',
+          icon: '📋',
+          action: handleSprintBoardClick,
         };
       }
       // 3. Exit Door to Hallway Corridor (x: 6.8, z: 8.2)
@@ -747,7 +747,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
       window.removeEventListener('keyup', handleKeyUp);
       renderer.dispose();
     };
-  }, [room.id]);
+  }, [room.id, room.theme]);
 
   // -------------------------------------------------------------
   // Dynamic Property Sync without Scene Re-Creation
@@ -881,6 +881,10 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
             return;
           }
           if (cur.userData?.hotspot === 'sprint_board' || cur.name === 'hotspot_sprint_board') {
+            handleSprintBoardClick();
+            return;
+          }
+          if (cur.userData?.hotspot === 'exit_door' || cur.name === 'hotspot_exit_door') {
             handleOpenHallway();
             return;
           }
@@ -900,10 +904,6 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onWheel={(e) => {
-        const delta = -e.deltaY * 0.001;
-        handleZoomChange(delta);
-      }}
       className="relative w-full h-[380px] sm:h-[480px] md:h-[540px] rounded-3xl overflow-hidden border-2 border-purple-500/40 shadow-[0_12px_40px_rgba(0,0,0,0.6)] select-none bg-[#100c1e] group"
     >
       {/* 1. WebGL Pixelated Canvas (Renders 3D Scene + Zero-Lag 3D Sprite Nametags) */}
@@ -1019,24 +1019,26 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           <div className="flex items-center bg-[#181524]/90 backdrop-blur-md p-1 rounded-2xl border border-purple-500/40 shadow-lg text-xs font-cozy">
             <button
               onClick={() => handleZoomChange(-0.15)}
-              title="Zoom Out Workspace"
-              className="p-1.5 rounded-xl text-purple-300 hover:text-white transition-all hover:bg-purple-900/50"
+              title="Zoom Out Workspace (-)"
+              className="px-2 py-1 rounded-xl text-purple-300 hover:text-white transition-all hover:bg-purple-900/50 flex items-center gap-1 font-bold active:scale-95"
             >
               <ZoomOut className="w-3.5 h-3.5" />
+              <span className="font-mono text-xs leading-none">−</span>
             </button>
             <button
               onClick={handleResetZoom}
               title="Click to Reset Zoom (100%)"
-              className="text-[11px] font-mono px-1.5 text-purple-200 min-w-[40px] text-center font-bold hover:text-white"
+              className="text-[11px] font-mono px-1.5 text-purple-200 min-w-[42px] text-center font-bold hover:text-white"
             >
               {Math.round(zoomLevel * 100)}%
             </button>
             <button
               onClick={() => handleZoomChange(0.15)}
-              title="Zoom In Workspace"
-              className="p-1.5 rounded-xl text-purple-300 hover:text-white transition-all hover:bg-purple-900/50"
+              title="Zoom In Workspace (+)"
+              className="px-2 py-1 rounded-xl text-purple-300 hover:text-white transition-all hover:bg-purple-900/50 flex items-center gap-1 font-bold active:scale-95"
             >
               <ZoomIn className="w-3.5 h-3.5" />
+              <span className="font-mono text-xs leading-none">+</span>
             </button>
           </div>
 
@@ -1066,12 +1068,12 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
         </button>
 
         <button
-          onClick={handleOpenHallway}
-          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
-          title="Check Blackboard & Room Wall"
+          onClick={handleSprintBoardClick}
+          className="pointer-events-auto flex items-center gap-1.5 px-3 py-1.5 bg-[#181524]/90 backdrop-blur-md hover:bg-purple-950/80 border border-purple-500/40 text-purple-200 text-xs font-cozy rounded-2xl shadow-lg transition-all active:scale-95"
+          title="Open Sprint Kanban Whiteboard"
         >
           <span>📋</span>
-          <span className="hidden sm:inline">Blackboard</span>
+          <span className="hidden sm:inline">Whiteboard</span>
         </button>
 
         <button

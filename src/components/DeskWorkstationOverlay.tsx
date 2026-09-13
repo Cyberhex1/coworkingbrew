@@ -1172,74 +1172,136 @@ export const DeskWorkstationOverlay: React.FC<DeskWorkstationOverlayProps> = ({
 
                   {/* WALLPAPERS CATALOG */}
                   {shopCategory === 'wallpapers' && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {WALLPAPERS.map((wp) => {
-                        const isEquipped = activeWallpaper === wp.id;
-                        const isUnlocked = unlockedWallpapers.includes(wp.id);
-                        const canAfford = tickets >= wp.cost;
-
-                        return (
-                          <div
-                            key={wp.id}
-                            className={`p-3.5 rounded-2xl border flex flex-col gap-3 transition-all ${
-                              isEquipped
-                                ? 'bg-purple-900/60 border-purple-400 shadow-lg'
-                                : 'bg-purple-950/40 border-purple-800/40 hover:border-purple-600'
-                            }`}
-                          >
-                            {/* Wallpaper Thumbnail Preview */}
-                            <div
-                              className={`h-24 rounded-xl border border-white/20 shadow-inner relative overflow-hidden flex items-center justify-center ${wp.gradientClass}`}
-                            >
-                              <img
-                                src={wp.imageUrl}
-                                alt={wp.name}
-                                onError={(e) => {
-                                  e.currentTarget.src = wp.svgFallback;
-                                }}
-                                className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                                referrerPolicy="no-referrer"
-                              />
-                              <div className="absolute inset-0 bg-black/15" />
-                              {isEquipped && (
-                                <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-white font-bold flex items-center gap-1 border border-white/20 shadow-lg">
-                                  <Check className="w-3 h-3 text-emerald-400" /> Active
+                    <div className="space-y-4">
+                      {/* Safari Browser Pro Unlocked vs Locked Banner */}
+                      {!unlockedApps.includes('browser') ? (
+                        <div className="bg-gradient-to-r from-purple-950/80 via-pink-950/70 to-indigo-950/80 border border-pink-500/50 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-pink-600/30 border border-pink-400/50 flex items-center justify-center text-pink-300 shrink-0 text-xl">
+                              🍜
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                <span>Basic Wallpapers Shown</span>
+                                <span className="bg-pink-500/20 text-pink-300 text-[10px] px-2 py-0.5 rounded-full border border-pink-400/30">
+                                  Safari Pro Required for Premium
                                 </span>
-                              )}
+                              </h4>
+                              <p className="text-[11px] text-purple-200/80 mt-0.5">
+                                Buy <strong>Safari Browser Pro</strong> (🎟️ 20) in Desktop Apps to unlock 15+ cute cartoon foods, pets, and anime wallpapers!
+                              </p>
                             </div>
-
-                            <div className="flex flex-col gap-0.5">
-                              <span className="text-xs font-bold text-white">{wp.name}</span>
-                              <span className="text-[10px] text-purple-300/80 leading-snug">{wp.desc}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const safariApp = appCatalog.find((a) => a.id === 'browser');
+                              if (safariApp) handleBuyApp(safariApp);
+                            }}
+                            className="shrink-0 px-4 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold font-cozy shadow-md transition-all active:scale-95 flex items-center gap-1.5"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            <span>Unlock Safari Pro (🎟️ 20)</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="bg-gradient-to-r from-emerald-950/70 via-teal-950/60 to-purple-950/70 border border-emerald-500/40 p-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-lg">✨</span>
+                            <div>
+                              <span className="text-xs font-bold text-white">Safari Browser Pro Active!</span>
+                              <span className="text-[11px] text-emerald-200/80 block">
+                                Full Cute Food & Pets Boutique unlocked in Safari. You can equip wallpapers directly here or inside Safari.
+                              </span>
                             </div>
+                          </div>
+                          <button
+                            onClick={() => setActiveApp('browser')}
+                            className="shrink-0 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm"
+                          >
+                            <Globe className="w-3.5 h-3.5" />
+                            <span>Open Safari Pro</span>
+                          </button>
+                        </div>
+                      )}
 
-                            <button
-                              onClick={() => handleEquipWallpaper(wp)}
-                              className={`w-full py-2 rounded-xl text-xs font-cozy font-bold transition-all flex items-center justify-center gap-1.5 ${
+                      {/* Wallpapers Grid: Only basic when Safari not purchased */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {(unlockedApps.includes('browser')
+                          ? WALLPAPERS
+                          : WALLPAPERS.filter((w) => w.tier === 'basic')
+                        ).map((wp) => {
+                          const isEquipped = activeWallpaper === wp.id;
+                          const isUnlocked = unlockedWallpapers.includes(wp.id);
+                          const canAfford = tickets >= wp.cost;
+
+                          return (
+                            <div
+                              key={wp.id}
+                              className={`p-3.5 rounded-2xl border flex flex-col justify-between gap-3 transition-all ${
                                 isEquipped
-                                  ? 'bg-emerald-600 text-white cursor-default'
-                                  : isUnlocked
-                                  ? 'bg-purple-600 hover:bg-purple-500 text-white'
-                                  : canAfford
-                                  ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-md'
-                                  : 'bg-purple-950 text-purple-500 border border-purple-800/40 cursor-not-allowed'
+                                  ? 'bg-purple-900/60 border-purple-400 shadow-lg'
+                                  : 'bg-purple-950/40 border-purple-800/40 hover:border-purple-600'
                               }`}
                             >
-                              {isEquipped ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" /> Equipped
-                                </>
-                              ) : isUnlocked ? (
-                                'Set Wallpaper'
-                              ) : (
-                                <>
-                                  <span>🎟️ {wp.cost} Tickets</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })}
+                              {/* Wallpaper Thumbnail Preview */}
+                              <div>
+                                <div
+                                  className={`h-24 rounded-xl border border-white/20 shadow-inner relative overflow-hidden flex items-center justify-center ${wp.gradientClass}`}
+                                >
+                                  <img
+                                    src={wp.imageUrl}
+                                    alt={wp.name}
+                                    onError={(e) => {
+                                      e.currentTarget.src = wp.svgFallback;
+                                    }}
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                  <div className="absolute inset-0 bg-black/15" />
+                                  {isEquipped && (
+                                    <span className="absolute top-2 right-2 bg-black/75 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-white font-bold flex items-center gap-1 border border-white/20 shadow-lg">
+                                      <Check className="w-3 h-3 text-emerald-400" /> Active
+                                    </span>
+                                  )}
+                                  <span className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded text-[9px] text-purple-200 font-mono">
+                                    {wp.category.toUpperCase()}
+                                  </span>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5 mt-2.5">
+                                  <span className="text-xs font-bold text-white">{wp.name}</span>
+                                  <span className="text-[10px] text-purple-300/80 leading-snug line-clamp-2">{wp.desc}</span>
+                                </div>
+                              </div>
+
+                              <button
+                                onClick={() => handleEquipWallpaper(wp)}
+                                className={`w-full py-2 rounded-xl text-xs font-cozy font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                  isEquipped
+                                    ? 'bg-emerald-600 text-white cursor-default'
+                                    : isUnlocked
+                                    ? 'bg-purple-600 hover:bg-purple-500 text-white'
+                                    : canAfford
+                                    ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-md'
+                                    : 'bg-purple-950 text-purple-500 border border-purple-800/40 cursor-not-allowed'
+                                }`}
+                              >
+                                {isEquipped ? (
+                                  <>
+                                    <Check className="w-3.5 h-3.5" /> Equipped
+                                  </>
+                                ) : isUnlocked ? (
+                                  'Set Wallpaper'
+                                ) : (
+                                  <>
+                                    <span>🎟️ {wp.cost} Tickets</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
