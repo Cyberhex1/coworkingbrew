@@ -1,12 +1,12 @@
 {
   "projectId": "mentalmedic-82280",
-  "appId": "1:185829809608:web:15b04f261e95d621d334fd",
+  "appId": "1:185829809608:web:d746c33391765295d334fd",
   "apiKey": "AIzaSyAz1iLblwW3nqiffTrEWuRtP2Rxdd9A8t0",
   "authDomain": "mentalmedic-82280.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-coworkingbrew-87a18c20-411f-407c-80ea-1d3942081d2a",
   "storageBucket": "mentalmedic-82280.firebasestorage.app",
   "messagingSenderId": "185829809608",
-  "measurementId": "",
+  "measurementId": "G-GV7ZRQ4XMR",
   "oAuthClientId": "185829809608-6s4s25e60i00eabqq0b2oo6st56ps5j0.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

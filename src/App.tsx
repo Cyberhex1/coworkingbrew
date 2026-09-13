@@ -36,10 +36,18 @@ import { AmbientSoundMixer } from './components/AmbientSoundMixer';
 import { StatisticsModal } from './components/StatisticsModal';
 import { RoomLobbyModal } from './components/RoomLobbyModal';
 import { BookshelfModal } from './components/BookshelfModal';
+import { AuthModal } from './components/AuthModal';
 import { DisplayModeBar } from './components/DisplayModeBar';
 import { StickerWidget } from './components/StickerWidget';
 import { DockedSidebar } from './components/DockedSidebar';
 import { soundEngine } from './utils/audioSynth';
+import {
+  auth,
+  saveFirebaseUserProfile,
+  getFirebaseUserProfile,
+  FirebaseUserProfile,
+} from './firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 import {
   Sparkles,
   Music,
@@ -51,6 +59,7 @@ import {
   Maximize2,
   Volume2,
   VolumeX,
+  User as UserIcon,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -196,6 +205,100 @@ export default function App() {
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [isLobbyOpen, setIsLobbyOpen] = useState(false);
   const [isBookshelfOpen, setIsBookshelfOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  // --- Auth & Cloud Profile State ---
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
+
+  // Listen to Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Automatically sync from cloud
+        try {
+          const profile = await getFirebaseUserProfile(user.uid);
+          if (profile) {
+            if (typeof profile.tickets === 'number') {
+              setTickets(profile.tickets);
+            }
+            if (typeof profile.totalMinutesFocused === 'number') {
+              setTotalFocusMinutes(profile.totalMinutesFocused);
+            }
+            if (profile.avatarConfigJson) {
+              try {
+                const parsedAvatar = JSON.parse(profile.avatarConfigJson);
+                setAvatar(parsedAvatar);
+              } catch (e) {
+                console.warn('Could not parse cloud avatar', e);
+              }
+            }
+            if (profile.deskConfigJson) {
+              try {
+                const parsedDesk = JSON.parse(profile.deskConfigJson);
+                setDesk(parsedDesk);
+              } catch (e) {
+                console.warn('Could not parse cloud desk', e);
+              }
+            }
+            if (profile.displayName && (!avatar.name || avatar.name === 'You')) {
+              setAvatar((prev) => ({ ...prev, name: profile.displayName }));
+            }
+          } else {
+            // First time login for this user: initialize their profile in Firestore
+            await saveFirebaseUserProfile({
+              userId: user.uid,
+              displayName: user.displayName || avatar.name || 'Cozy Coworker',
+              email: user.email || undefined,
+              tickets,
+              totalMinutesFocused: totalFocusMinutes,
+              avatarConfigJson: JSON.stringify(avatar),
+              deskConfigJson: JSON.stringify(desk),
+            });
+          }
+          setIsCloudSynced(true);
+        } catch (err) {
+          console.warn('Firebase user profile sync notice:', err);
+        }
+      } else {
+        setIsCloudSynced(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Manual & Auto cloud sync handler
+  const handleCloudSync = async () => {
+    if (!currentUser) return;
+    try {
+      await saveFirebaseUserProfile({
+        userId: currentUser.uid,
+        displayName: currentUser.displayName || avatar.name || 'Cozy Coworker',
+        email: currentUser.email || undefined,
+        tickets,
+        totalMinutesFocused: totalFocusMinutes,
+        currentActivity: activeTask ? activeTask.title : avatar.statusText,
+        avatarConfigJson: JSON.stringify(avatar),
+        deskConfigJson: JSON.stringify(desk),
+        unlockedItemsJson: JSON.stringify(shopItems.filter((s) => s.isUnlocked).map((s) => s.id)),
+      });
+      setIsCloudSynced(true);
+    } catch (err) {
+      console.warn('Cloud sync err:', err);
+    }
+  };
+
+  // Sync to cloud when major state items change and user is logged in
+  useEffect(() => {
+    if (currentUser) {
+      const timer = setTimeout(() => {
+        handleCloudSync();
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [tickets, totalFocusMinutes, avatar, desk, currentUser]);
 
   // --- LocalStorage Synchronization ---
   useEffect(() => {
@@ -667,15 +770,49 @@ export default function App() {
           </div>
 
           {/* Right Status & Display Mode Switcher */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             {/* Tickets Balance Pill */}
             <button
               onClick={() => setIsShopOpen(true)}
               title="Open Ticket Shop"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 font-cozy font-bold text-xs shadow-inner hover:scale-105 transition-transform"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 font-cozy font-bold text-xs shadow-inner hover:scale-105 transition-transform"
             >
               <span>🎟️</span>
               <span>{tickets}</span>
+            </button>
+
+            {/* Cafe Member Account Pass Button */}
+            <button
+              onClick={() => setIsAuthOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-950/70 hover:bg-purple-900/80 border border-purple-600/40 hover:border-purple-400 text-xs font-cozy text-purple-200 hover:text-white transition-all shadow-md group"
+              title={currentUser ? "Account Profile & Cloud Sync" : "Sign In / Cafe Member Pass"}
+            >
+              <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-purple-500 to-indigo-500 flex items-center justify-center text-[10px] text-white font-bold overflow-hidden border border-purple-400/40 flex-shrink-0">
+                {currentUser?.photoURL ? (
+                  <img
+                    src={currentUser.photoURL}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                ) : currentUser?.displayName ? (
+                  currentUser.displayName[0].toUpperCase()
+                ) : (
+                  <UserIcon className="w-3 h-3 text-purple-200" />
+                )}
+              </div>
+              <div className="hidden sm:flex flex-col items-start leading-none text-left">
+                <span className="font-semibold text-white max-w-[85px] truncate text-[11px]">
+                  {currentUser ? (currentUser.displayName || 'Member') : 'Member Pass'}
+                </span>
+                <span className="text-[9px] text-purple-400 flex items-center gap-1 mt-0.5">
+                  {currentUser ? (
+                    <span className="text-emerald-400 font-mono">● Synced</span>
+                  ) : (
+                    <span className="text-purple-300">Sign In</span>
+                  )}
+                </span>
+              </div>
             </button>
 
             {/* Display Mode Bar */}
@@ -857,6 +994,16 @@ export default function App() {
       <BookshelfModal
         isOpen={isBookshelfOpen}
         onClose={() => setIsBookshelfOpen(false)}
+      />
+
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        currentUser={currentUser}
+        tickets={tickets}
+        totalFocusMinutes={totalFocusMinutes}
+        streakDays={currentStreak}
+        onTriggerSync={handleCloudSync}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getAnalytics, isSupported as isAnalyticsSupported, Analytics } from 'firebase/analytics';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -6,6 +7,8 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
+  updatePassword,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   User,
@@ -29,6 +32,20 @@ import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize Analytics safely
+export let analytics: Analytics | null = null;
+if (typeof window !== 'undefined' && firebaseConfig.measurementId) {
+  isAnalyticsSupported()
+    .then((supported) => {
+      if (supported) {
+        analytics = getAnalytics(app);
+      }
+    })
+    .catch((err) => {
+      console.warn('Firebase Analytics not supported in this environment:', err);
+    });
+}
 
 // CRITICAL: Initialize Firestore with explicit firestoreDatabaseId from config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -123,6 +140,16 @@ export async function signUpWithEmail(email: string, pass: string, displayName: 
 
 export async function logOut(): Promise<void> {
   await signOut(auth);
+}
+
+export async function updateUserDisplayName(newDisplayName: string): Promise<void> {
+  if (auth.currentUser) {
+    await updateProfile(auth.currentUser, { displayName: newDisplayName });
+  }
+}
+
+export async function resetUserPassword(email: string): Promise<void> {
+  await sendPasswordResetEmail(auth, email);
 }
 
 // --- Data Types & Firestore APIs ---
