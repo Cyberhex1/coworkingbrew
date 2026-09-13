@@ -148,6 +148,194 @@
         }
       },
       "required": ["userId", "authorName", "text"]
+    },
+    "RoomPresence": {
+      "title": "Room Presence",
+      "description": "Real-time presence of a user in a specific room and server instance with assigned desk",
+      "type": "object",
+      "properties": {
+        "presenceId": {
+          "type": "string",
+          "description": "Composite key {roomId}_{userId}",
+          "maxLength": 160
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Unique room server ID",
+          "maxLength": 80
+        },
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID",
+          "maxLength": 128
+        },
+        "userName": {
+          "type": "string",
+          "description": "Display name of the coworker",
+          "maxLength": 80
+        },
+        "avatarConfigJson": {
+          "type": "string",
+          "description": "Serialized JSON avatar config",
+          "maxLength": 2048
+        },
+        "deskConfigJson": {
+          "type": "string",
+          "description": "Serialized JSON desk config",
+          "maxLength": 2048
+        },
+        "deskIndex": {
+          "type": "number",
+          "description": "Assigned cubicle desk slot 1 to 5"
+        },
+        "currentTask": {
+          "type": "string",
+          "description": "Current task title",
+          "maxLength": 120
+        },
+        "focusMinutesToday": {
+          "type": "number",
+          "description": "Focus minutes today"
+        },
+        "tickets": {
+          "type": "number",
+          "description": "Current ticket count"
+        },
+        "reactionEmoji": {
+          "type": "string",
+          "description": "Active floating reaction emoji",
+          "maxLength": 20
+        },
+        "reactionTimestamp": {
+          "type": "number",
+          "description": "Reaction timestamp ms"
+        },
+        "lastSeen": {
+          "type": "string",
+          "description": "ISO timestamp for presence heartbeat"
+        }
+      },
+      "required": ["presenceId", "roomId", "userId", "userName", "deskIndex"]
+    },
+    "Friendship": {
+      "title": "Friendship",
+      "description": "Coworker friends list connection",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Current user ID",
+          "maxLength": 128
+        },
+        "friendUserId": {
+          "type": "string",
+          "description": "Friend's user ID",
+          "maxLength": 128
+        },
+        "friendName": {
+          "type": "string",
+          "description": "Friend's display name",
+          "maxLength": 80
+        },
+        "avatarConfigJson": {
+          "type": "string",
+          "description": "Serialized friend avatar config",
+          "maxLength": 2048
+        },
+        "addedAt": {
+          "type": "string",
+          "description": "ISO timestamp when added as friend"
+        }
+      },
+      "required": ["userId", "friendUserId", "friendName"]
+    },
+    "DirectMessage": {
+      "title": "Direct Message",
+      "description": "Private direct message between two coworkers",
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Unique DM identifier",
+          "maxLength": 128
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Sender Firebase Auth UID",
+          "maxLength": 128
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Sender display name",
+          "maxLength": 80
+        },
+        "recipientId": {
+          "type": "string",
+          "description": "Recipient Firebase Auth UID",
+          "maxLength": 128
+        },
+        "recipientName": {
+          "type": "string",
+          "description": "Recipient display name",
+          "maxLength": 80
+        },
+        "text": {
+          "type": "string",
+          "description": "Private message text content",
+          "maxLength": 1000
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp in milliseconds"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether message has been seen"
+        }
+      },
+      "required": ["messageId", "senderId", "senderName", "recipientId", "recipientName", "text", "timestamp"]
+    },
+    "RoomChatMessage": {
+      "title": "Room Chat Message",
+      "description": "Public chat message broadcast within a specific room and server",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique chat message ID",
+          "maxLength": 128
+        },
+        "roomId": {
+          "type": "string",
+          "description": "Room server ID",
+          "maxLength": 80
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Sender user ID",
+          "maxLength": 128
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Sender display name",
+          "maxLength": 80
+        },
+        "avatarSeed": {
+          "type": "string",
+          "description": "Avatar style identifier or emoji",
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "description": "Chat message text",
+          "maxLength": 500
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Timestamp in milliseconds"
+        }
+      },
+      "required": ["id", "roomId", "senderId", "senderName", "message", "timestamp"]
     }
   },
   "firestore": {
@@ -159,9 +347,25 @@
       "schema": "BookshelfItem",
       "description": "Stores personal bookshelf items, reading status, bookmarks, and notes"
     },
+    "/users/{userId}/friends/{friendUserId}": {
+      "schema": "Friendship",
+      "description": "Stores coworker friend connections"
+    },
     "/cafe_notes/{noteId}": {
       "schema": "CafeSharedNote",
       "description": "Stores public sticky notes and book recommendations left by coworkers"
+    },
+    "/room_presences/{presenceId}": {
+      "schema": "RoomPresence",
+      "description": "Stores live active coworker presences and desk positions per room and server"
+    },
+    "/direct_messages/{messageId}": {
+      "schema": "DirectMessage",
+      "description": "Stores real-time 1-on-1 private messages between coworkers"
+    },
+    "/room_chats/{chatId}": {
+      "schema": "RoomChatMessage",
+      "description": "Stores room-specific real-time chat messages"
     }
   }
 }

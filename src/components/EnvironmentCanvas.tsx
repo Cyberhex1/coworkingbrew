@@ -32,6 +32,7 @@ interface EnvironmentCanvasProps {
   onUpdateDesk?: (newDesk: any) => void;
   focusMinutesToday?: number;
   streakDays?: number;
+  onSelectPeer?: (peer: RoomPeer) => void;
 }
 
 export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
@@ -60,6 +61,7 @@ export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
   onUpdateDesk,
   focusMinutesToday = 75,
   streakDays = 3,
+  onSelectPeer,
 }) => {
   const [engineMode, setEngineMode] = useState<'3d_voxel' | '2d_chibi'>('3d_voxel');
   const [selectedPeer, setSelectedPeer] = useState<RoomPeer | null>(null);
@@ -96,6 +98,7 @@ export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
           focusMinutesToday={focusMinutesToday}
           streakDays={streakDays}
           onSwitchTo2D={() => setEngineMode('2d_chibi')}
+          onSelectPeer={onSelectPeer}
         />
       </div>
     );
@@ -328,7 +331,12 @@ export const EnvironmentCanvas: React.FC<EnvironmentCanvasProps> = ({
           return (
             <div
               key={peer.id}
-              onClick={() => setSelectedPeer(peer)}
+              onClick={() => {
+                setSelectedPeer(peer);
+                if (!isMe && onSelectPeer) {
+                  onSelectPeer(peer);
+                }
+              }}
               className={`relative flex flex-col items-center group cursor-pointer transition-all duration-300 p-1 rounded-xl ${
                 isMe ? 'ring-2 ring-purple-400/60 bg-purple-950/20' : 'hover:bg-purple-950/20'
               }`}

@@ -15,7 +15,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 160 && id.matches('^[a-zA-Z0-9_\\-\\.]+$');
     }
 
     function incoming() {
@@ -59,6 +59,57 @@ service cloud.firestore {
              (!('category' in data) || (data.category is string && data.category.size() <= 50));
     }
 
+    // Validation for RoomPresence
+    function isValidRoomPresence(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.roomId is string && data.roomId.size() > 0 && data.roomId.size() <= 80 &&
+             data.userName is string && data.userName.size() > 0 && data.userName.size() <= 80 &&
+             data.deskIndex is number && data.deskIndex >= 0 && data.deskIndex <= 10 &&
+             (!('avatarConfigJson' in data) || (data.avatarConfigJson is string && data.avatarConfigJson.size() <= 2048)) &&
+             (!('deskConfigJson' in data) || (data.deskConfigJson is string && data.deskConfigJson.size() <= 2048)) &&
+             (!('currentTask' in data) || (data.currentTask is string && data.currentTask.size() <= 120)) &&
+             (!('status' in data) || (data.status is string && data.status.size() <= 120)) &&
+             (!('presenceId' in data) || (data.presenceId is string && data.presenceId.size() <= 160)) &&
+             (!('tickets' in data) || data.tickets is number) &&
+             (!('focusMinutesToday' in data) || data.focusMinutesToday is number) &&
+             (!('lastSeen' in data) || (data.lastSeen is string || data.lastSeen is number)) &&
+             (!('reactionEmoji' in data) || (data.reactionEmoji is string && data.reactionEmoji.size() <= 20)) &&
+             (!('reactionTimestamp' in data) || data.reactionTimestamp is number);
+    }
+
+    // Validation for Friendship
+    function isValidFriendship(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.friendUserId is string && data.friendUserId.size() > 0 && data.friendUserId.size() <= 128 &&
+             data.friendName is string && data.friendName.size() > 0 && data.friendName.size() <= 80 &&
+             (!('addedAt' in data) || (data.addedAt is string && data.addedAt.size() <= 60)) &&
+             (!('avatarConfigJson' in data) || (data.avatarConfigJson is string && data.avatarConfigJson.size() <= 2048));
+    }
+
+    // Validation for DirectMessage
+    function isValidDirectMessage(data) {
+      return data.senderId is string && data.senderId == request.auth.uid &&
+             data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 80 &&
+             data.recipientId is string && data.recipientId.size() > 0 && data.recipientId.size() <= 128 &&
+             data.recipientName is string && data.recipientName.size() > 0 && data.recipientName.size() <= 80 &&
+             (!('text' in data) || (data.text is string && data.text.size() <= 1000)) &&
+             (!('content' in data) || (data.content is string && data.content.size() <= 1000)) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 160)) &&
+             (!('messageId' in data) || (data.messageId is string && data.messageId.size() <= 160)) &&
+             (!('read' in data) || data.read is bool) &&
+             (!('timestamp' in data) || data.timestamp is number) &&
+             (!('createdAt' in data) || data.createdAt is number);
+    }
+
+    // Validation for RoomChatMessage
+    function isValidRoomChatMessage(data) {
+      return data.senderId is string && data.senderId == request.auth.uid &&
+             data.senderName is string && data.senderName.size() > 0 && data.senderName.size() <= 80 &&
+             data.roomId is string && data.roomId.size() > 0 && data.roomId.size() <= 80 &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 500 &&
+             data.timestamp is number;
+    }
+
     // User Profile
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -77,16 +128,54 @@ service cloud.firestore {
                       incoming().bookId == existing().bookId;
         allow delete: if isOwner(userId);
       }
+
+      // Friends list
+      match /friends/{friendUserId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(friendUserId) && isValidFriendship(incoming());
+        allow update: if isOwner(userId) && isValidId(friendUserId) && isValidFriendship(incoming()) &&
+                      incoming().userId == existing().userId;
+        allow delete: if isOwner(userId);
+      }
     }
 
-    // Shared Cafe Community Notes / Bookshelf Recommendations
+    // Shared Cafe Community Notes
     match /cafe_notes/{noteId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
+      allow get: if true;
+      allow list: if true;
       allow create: if isSignedIn() && isValidId(noteId) && isValidCafeSharedNote(incoming());
       allow update: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid &&
                     isValidCafeSharedNote(incoming()) && incoming().userId == existing().userId;
       allow delete: if isSignedIn() && isValidId(noteId) && resource.data.userId == request.auth.uid;
+    }
+
+    // Live Room Presence (Real-time Multiplayer)
+    match /room_presences/{presenceId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn() && isValidId(presenceId) && isValidRoomPresence(incoming());
+      allow update: if isSignedIn() && isValidId(presenceId) && resource.data.userId == request.auth.uid &&
+                    isValidRoomPresence(incoming()) && incoming().userId == existing().userId;
+      allow delete: if isSignedIn() && isValidId(presenceId) && resource.data.userId == request.auth.uid;
+    }
+
+    // Direct Messages (PMs)
+    match /direct_messages/{messageId} {
+      allow get: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(messageId) && isValidDirectMessage(incoming());
+      allow update: if isSignedIn() && isValidId(messageId) && (resource.data.recipientId == request.auth.uid || resource.data.senderId == request.auth.uid);
+      allow delete: if isSignedIn() && isValidId(messageId) && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid);
+    }
+
+    // Room Chat Messages
+    match /room_chats/{chatId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn() && isValidId(chatId) && isValidRoomChatMessage(incoming());
+      allow update: if isSignedIn() && isValidId(chatId) && resource.data.senderId == request.auth.uid;
+      allow delete: if isSignedIn() && isValidId(chatId) && resource.data.senderId == request.auth.uid;
     }
   }
 }

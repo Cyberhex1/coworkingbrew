@@ -68,6 +68,7 @@ interface Pixel3DWorldProps {
   focusMinutesToday?: number;
   streakDays?: number;
   onSwitchTo2D?: () => void;
+  onSelectPeer?: (peer: RoomPeer) => void;
 }
 
 export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
@@ -97,6 +98,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   focusMinutesToday = 75,
   streakDays = 3,
   onSwitchTo2D,
+  onSelectPeer,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -145,23 +147,29 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   const [activeTrigger, setActiveTrigger] = useState<ProximityTrigger | null>(null);
   const activeTriggerRef = useRef<ProximityTrigger | null>(null);
 
-  // 8 Desk placement coordinates in the expanded 20x18 3D office room
-  // Row 1 (z = -0.9): 4 desks spaced at x = -3.9, -1.3, 1.3, 3.9
-  // Row 2 (z = 2.2):  4 desks spaced at x = -3.9, -1.3, 1.3, 3.9
+  // 6 Desk placement coordinates in the expanded 20x18 3D room
+  // Desk 0: Designated Room Study Bot
+  // Desks 1-5: Player Desks
   const deskLocations = [
-    { x: -3.9, z: -0.9 },   // User Desk 0
-    { x: -1.3, z: -0.9 },   // Peer Desk 1 (Jordan)
-    { x: 1.3, z: -0.9 },    // Peer Desk 2 (Sam)
-    { x: 3.9, z: -0.9 },    // Peer Desk 3 (Riley)
-    { x: -3.9, z: 2.2 },    // Peer Desk 4 (Chloe)
-    { x: -1.3, z: 2.2 },    // Peer Desk 5 (Lucas)
-    { x: 1.3, z: 2.2 },     // Peer Desk 6 (Maya)
-    { x: 3.9, z: 2.2 },     // Peer Desk 7 (Sofia)
+    { x: -3.8, z: -0.9 },   // Desk 0 (Room Bot)
+    { x: -1.3, z: -0.9 },   // Desk 1
+    { x: 1.3, z: -0.9 },    // Desk 2
+    { x: 3.8, z: -0.9 },    // Desk 3
+    { x: -2.2, z: 2.2 },    // Desk 4
+    { x: 2.2, z: 2.2 },     // Desk 5
   ];
+
+  // User assigned desk index (defaults to 1 if not specified)
+  const userDeskIdx = userPeer.deskIndex !== undefined ? userPeer.deskIndex : 1;
+  const userDeskLoc = deskLocations[userDeskIdx] || deskLocations[1];
 
   // Stable Refs for 3D state loop (Prevents unwanted re-mounting and character snapping!)
   const isSittingRef = useRef<boolean>(true);
-  const userPosRef = useRef<{ x: number; y: number; z: number }>({ x: -3.9, y: 0, z: -1.32 });
+  const userPosRef = useRef<{ x: number; y: number; z: number }>({
+    x: userDeskLoc.x,
+    y: 0,
+    z: userDeskLoc.z - 0.42,
+  });
   const keysPressed = useRef<{ [key: string]: boolean }>({});
   const timeOfDayRef = useRef<TimeOfDay>(timeOfDay);
   const cameraModeRef = useRef<'isometric' | 'orbit' | 'desk'>(cameraMode);
@@ -211,7 +219,8 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   };
 
   const handleReturnToDesk = () => {
-    userPosRef.current = { x: deskLocations[0].x, y: 0, z: deskLocations[0].z - 0.42 };
+    const targetDesk = deskLocations[userDeskIdx] || deskLocations[1];
+    userPosRef.current = { x: targetDesk.x, y: 0, z: targetDesk.z - 0.42 };
     if (userGroupRef.current) {
       userGroupRef.current.position.set(userPosRef.current.x, 0, userPosRef.current.z);
       userGroupRef.current.rotation.y = 0;
@@ -350,11 +359,22 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
     const particles = new THREE.Points(particleGeo, particleMat);
     scene.add(particles);
 
-    // 6. Spawn Desks & Avatars
-    // A. User Desk
-    const userDeskObj = buildVoxelDesk(userPeer.desk);
-    userDeskObj.position.set(deskLocations[0].x, 0, deskLocations[0].z);
-    scene.add(userDeskObj);
+    // 6. Spawn 6 Workspace Desks & Active Avatars
+    // A. Spawn All 6 Desks
+    for (let dIdx = 0; dIdx < deskLocations.length; dIdx++) {
+      const loc = deskLocations[dIdx];
+      let dConfig = userPeer.desk;
+      if (userDeskIdx === dIdx) {
+        dConfig = userPeer.desk;
+      } else {
+        const occupant = peers.find((p) => p.deskIndex === dIdx);
+        if (occupant) dConfig = occupant.desk;
+      }
+      const deskObj = buildVoxelDesk(dConfig);
+      deskObj.position.set(loc.x, 0, loc.z);
+      deskObj.userData = { deskIndex: dIdx };
+      scene.add(deskObj);
+    }
 
     // B. User Avatar (With 3D integrated nametag for 0-lag synchronization)
     const userAvatar = buildVoxelAvatar(
@@ -366,27 +386,31 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
     const userGroup = new THREE.Group();
     userGroup.position.set(userPosRef.current.x, userPosRef.current.y, userPosRef.current.z);
     userGroup.add(userAvatar.group);
+    userGroup.userData = { isUser: true };
     scene.add(userGroup);
     userAvatarInstanceRef.current = userAvatar;
     userGroupRef.current = userGroup;
 
-    // C. Peer Desks and Avatars
+    // C. Peer Avatars (Bot at Desk 0, other connected peers at their deskIndex)
     const newPeerInstances = new Map<string, VoxelAvatarInstance>();
 
-    peers.forEach((peer, idx) => {
-      const loc = deskLocations[idx + 1] || { x: (idx - 1) * 2.5, z: -3 };
-      // Desk
-      const pDesk = buildVoxelDesk(peer.desk);
-      pDesk.position.set(loc.x, 0, loc.z);
-      scene.add(pDesk);
+    peers.forEach((peer) => {
+      const pDeskIdx = peer.deskIndex !== undefined ? peer.deskIndex : 0;
+      const loc = deskLocations[pDeskIdx] || deskLocations[0];
 
       // Avatar (Sitting in chair at z - 0.42 facing desk and room +Z)
       const pAvatar = buildVoxelAvatar(peer.avatar, peer.name, peer.currentTask, peer.reactionEmoji);
       const pGroup = new THREE.Group();
       pGroup.position.set(loc.x, 0, loc.z - 0.42);
+      pGroup.userData = { peerId: peer.id, isPeer: true, hotspot: 'peer_avatar' };
       pGroup.add(pAvatar.group);
-      scene.add(pGroup);
 
+      // Add userData to child meshes for raycasting
+      pAvatar.group.traverse((child) => {
+        child.userData = { peerId: peer.id, isPeer: true, hotspot: 'peer_avatar' };
+      });
+
+      scene.add(pGroup);
       newPeerInstances.set(peer.id, pAvatar);
     });
     peerAvatarInstancesRef.current = newPeerInstances;
@@ -586,7 +610,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
         };
       }
       // 9. User Desk Workstation (when walking and near own desk)
-      else if (Math.hypot(uX - deskLocations[0].x, uZ - (deskLocations[0].z - 0.42)) < 2.5) {
+      else if (Math.hypot(uX - userDeskLoc.x, uZ - (userDeskLoc.z - 0.42)) < 2.5) {
         detectedTrigger = {
           id: 'user_desk',
           label: 'Sit at Workstation',
@@ -594,21 +618,26 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleReturnToDesk,
         };
       }
-      // 10. Peer Desks: high-five coworker when visiting their cubicle!
+      // 10. Peer & Bot Desks: visit coworker / bot to open Nametag Modal (Add Friend / PM / Cheer)!
       else {
         for (let pIdx = 0; pIdx < peers.length; pIdx++) {
           const peer = peers[pIdx];
-          const pLoc = deskLocations[pIdx + 1];
+          const pDeskIdx = peer.deskIndex !== undefined ? peer.deskIndex : 0;
+          const pLoc = deskLocations[pDeskIdx];
           if (pLoc && Math.hypot(uX - pLoc.x, uZ - (pLoc.z - 0.42)) < 2.5) {
             detectedTrigger = {
               id: peer.id,
-              label: `High-Five ${peer.name}`,
-              icon: '👏',
+              label: `Interact with ${peer.name}`,
+              icon: '👋',
               action: () => {
-                onSendHighFive(peer.id);
-                soundEngine.playCoin();
-                confetti({ particleCount: 20, spread: 45 });
-                showOfficeNotice(`Gave high-five to ${peer.name}! 👏`);
+                if (onSelectPeer) {
+                  onSelectPeer(peer);
+                } else {
+                  onSendHighFive(peer.id);
+                  soundEngine.playCoin();
+                  confetti({ particleCount: 20, spread: 45 });
+                  showOfficeNotice(`Gave high-five to ${peer.name}! 👏`);
+                }
               },
             };
             break;
@@ -860,6 +889,13 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
       for (const hit of intersects) {
         let cur: THREE.Object3D | null = hit.object;
         while (cur) {
+          if (cur.userData?.peerId) {
+            const foundPeer = peers.find((p) => p.id === cur.userData.peerId);
+            if (foundPeer && onSelectPeer) {
+              onSelectPeer(foundPeer);
+              return;
+            }
+          }
           if (cur.userData?.hotspot === 'blackboard' || cur.name === 'hotspot_blackboard') {
             handleOpenHallway();
             return;
@@ -1291,10 +1327,15 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
                 {!tag.isUser && isPeerHovered && (
                   <div
                     onClick={() => {
-                      onSendHighFive(tag.id);
-                      soundEngine.playCoin();
-                      confetti({ particleCount: 15, spread: 35 });
-                      showOfficeNotice(`Gave high-five to ${tag.name}! 👏`);
+                      const foundPeer = peers.find((p) => p.id === tag.id);
+                      if (foundPeer && onSelectPeer) {
+                        onSelectPeer(foundPeer);
+                      } else {
+                        onSendHighFive(tag.id);
+                        soundEngine.playCoin();
+                        confetti({ particleCount: 15, spread: 35 });
+                        showOfficeNotice(`Gave high-five to ${tag.name}! 👏`);
+                      }
                     }}
                     className="flex flex-col items-center gap-1 bg-[#18122c]/95 border-2 border-amber-400/90 rounded-2xl p-1.5 shadow-[0_8px_25px_rgba(0,0,0,0.8)] backdrop-blur-md cursor-pointer transition-all scale-105 animate-in fade-in zoom-in-95 duration-150"
                   >
@@ -1306,8 +1347,8 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
                     <div className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-cozy">
                       <span className={`w-2 h-2 rounded-full ${tag.isOnline ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-500'}`} />
                       <span className="font-bold text-white whitespace-nowrap">{tag.name}</span>
-                      <span className="text-[10px] bg-purple-900/80 text-purple-200 px-1.5 py-0.5 rounded-md border border-purple-700/50">
-                        👏 High-Five
+                      <span className="text-[10px] bg-purple-900/80 text-amber-300 px-1.5 py-0.5 rounded-md border border-purple-700/50">
+                        💬 Add / PM
                       </span>
                     </div>
                     {tag.task && (

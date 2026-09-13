@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Globe,
   ArrowLeft,
@@ -19,6 +19,13 @@ import {
   Bookmark,
   ExternalLink,
   Flame,
+  Eye,
+  Maximize2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  Monitor,
 } from 'lucide-react';
 import { DeskConfig } from '../types';
 import { WallpaperId, WallpaperItem, WALLPAPERS } from './DeskWorkstationOverlay';
@@ -192,7 +199,20 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'social' | 'boutique' | 'wallpapers'>('social');
   const [wallpaperFilter, setWallpaperFilter] = useState<'all' | 'food' | 'pet' | 'anime' | 'scenery' | 'basic'>('all');
+  const [previewModalWallpaper, setPreviewModalWallpaper] = useState<WallpaperItem | null>(null);
+  const [hoveredWpId, setHoveredWpId] = useState<string | null>(null);
   const [urlInput, setUrlInput] = useState('brew://social-lounge');
+
+  // Handle ESC key to close wallpaper preview modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewModalWallpaper) {
+        setPreviewModalWallpaper(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewModalWallpaper]);
   const [posts, setPosts] = useState<SocialPost[]>(() => {
     const saved = localStorage.getItem('coworkingbrew_browser_posts');
     return saved ? JSON.parse(saved) : INITIAL_POSTS;
@@ -686,20 +706,29 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
               {WALLPAPERS.filter((wp) => wallpaperFilter === 'all' || wp.category === wallpaperFilter).map((wp) => {
                 const isUnlocked = unlockedWallpapers.includes(wp.id);
                 const isActive = activeWallpaper === wp.id;
+                const isHovered = hoveredWpId === wp.id;
 
                 return (
                   <div
                     key={wp.id}
-                    className={`group relative rounded-2xl overflow-hidden border p-3.5 flex flex-col justify-between transition-all ${
+                    onMouseEnter={() => setHoveredWpId(wp.id)}
+                    onMouseLeave={() => setHoveredWpId(null)}
+                    className={`group relative rounded-2xl overflow-hidden border p-3.5 flex flex-col justify-between transition-all duration-200 ${
                       isActive
                         ? 'border-pink-400 bg-[#231536] ring-2 ring-pink-400/50 shadow-xl'
+                        : isHovered
+                        ? 'border-pink-500/70 bg-[#1c142e] shadow-lg shadow-pink-950/40 -translate-y-0.5'
                         : 'border-purple-500/30 bg-[#161226] hover:border-pink-500/60 shadow-md'
                     }`}
                   >
                     {/* Wallpaper Preview Swatch */}
                     <div>
                       <div
-                        className={`w-full h-24 rounded-xl shadow-inner relative overflow-hidden transition-transform group-hover:scale-102 ${wp.gradientClass}`}
+                        onClick={() => {
+                          setPreviewModalWallpaper(wp);
+                          soundEngine.playChime('chime');
+                        }}
+                        className={`w-full h-28 rounded-xl shadow-inner relative overflow-hidden cursor-pointer transition-transform duration-300 group-hover:scale-[1.02] ${wp.gradientClass}`}
                       >
                         <img
                           src={wp.imageUrl}
@@ -712,7 +741,16 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
                           className="w-full h-full object-cover"
                           referrerPolicy="no-referrer"
                         />
-                        <div className="absolute inset-0 bg-black/15" />
+                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+
+                        {/* Hover Overlay Button */}
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white">
+                          <span className="bg-pink-600/90 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl shadow-lg border border-white/20 flex items-center gap-1.5 transform translate-y-1 group-hover:translate-y-0 transition-transform">
+                            <Maximize2 className="w-3.5 h-3.5" />
+                            <span>Preview Fullscreen</span>
+                          </span>
+                        </div>
+
                         {isActive && (
                           <div className="absolute top-2 right-2 bg-pink-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-md shadow-md flex items-center gap-1 z-10 border border-white/20">
                             <Check className="w-3 h-3 stroke-[3]" />
@@ -725,9 +763,21 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
                       </div>
 
                       <div className="mt-2.5 space-y-0.5">
-                        <h4 className="text-xs font-bold text-white group-hover:text-pink-300 transition-colors">
-                          {wp.name}
-                        </h4>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-white group-hover:text-pink-300 transition-colors">
+                            {wp.name}
+                          </h4>
+                          <button
+                            onClick={() => {
+                              setPreviewModalWallpaper(wp);
+                              soundEngine.playChime('chime');
+                            }}
+                            title="Open larger preview"
+                            className="text-purple-400 hover:text-pink-300 p-1 rounded-lg hover:bg-purple-900/40 transition-colors"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                         <p className="text-[10px] text-purple-300/80 line-clamp-2 leading-relaxed">{wp.desc}</p>
                       </div>
                     </div>
@@ -737,24 +787,213 @@ export const DesktopBrowserApp: React.FC<DesktopBrowserAppProps> = ({
                         {wp.cost === 0 ? 'Free Default' : `🎟️ ${wp.cost}`}
                       </span>
 
-                      <button
-                        onClick={() => onSelectWallpaper(wp)}
-                        className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
-                          isActive
-                            ? 'bg-pink-600 text-white font-semibold'
-                            : isUnlocked
-                            ? 'bg-purple-700 hover:bg-purple-600 text-white'
-                            : tickets >= wp.cost
-                            ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold'
-                            : 'bg-purple-900/40 text-purple-400 cursor-not-allowed'
-                        }`}
-                      >
-                        {isActive ? 'Current' : isUnlocked ? 'Apply' : `Unlock`}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => {
+                            setPreviewModalWallpaper(wp);
+                            soundEngine.playChime('chime');
+                          }}
+                          className="px-2 py-1 rounded-xl text-[11px] font-semibold bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-800/60 transition-colors"
+                        >
+                          Preview
+                        </button>
+                        <button
+                          onClick={() => onSelectWallpaper(wp)}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                            isActive
+                              ? 'bg-pink-600 text-white font-semibold'
+                              : isUnlocked
+                              ? 'bg-purple-700 hover:bg-purple-600 text-white'
+                              : tickets >= wp.cost
+                              ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold'
+                              : 'bg-purple-900/40 text-purple-400 cursor-not-allowed'
+                          }`}
+                        >
+                          {isActive ? 'Current' : isUnlocked ? 'Apply' : `Unlock`}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ================= FULL-SCREEN WALLPAPER PREVIEW MODAL ================= */}
+        {previewModalWallpaper && (
+          <div
+            className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6 animate-fadeIn"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setPreviewModalWallpaper(null);
+            }}
+          >
+            {/* Modal Container */}
+            <div className="w-full max-w-5xl bg-[#130f24] border border-purple-500/40 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Top Header Bar */}
+              <div className="bg-[#1a1530] border-b border-purple-800/40 px-5 py-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-3 h-3 rounded-full bg-rose-500/80 cursor-pointer" onClick={() => setPreviewModalWallpaper(null)} />
+                  <div className="w-3 h-3 rounded-full bg-amber-500/80" />
+                  <div className="w-3 h-3 rounded-full bg-emerald-500/80" />
+                  <span className="text-xs font-bold text-purple-200 ml-2 flex items-center gap-1.5 font-mono">
+                    <Monitor className="w-3.5 h-3.5 text-pink-400" />
+                    <span>Live Desktop Fullscreen Preview: {previewModalWallpaper.name}</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-purple-400 font-mono hidden sm:inline">Press ESC to exit</span>
+                  <button
+                    onClick={() => setPreviewModalWallpaper(null)}
+                    className="p-1.5 rounded-xl bg-purple-900/50 hover:bg-rose-900/50 text-purple-300 hover:text-white transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Full Desktop Mockup Canvas */}
+              <div className="relative flex-1 min-h-[360px] sm:min-h-[440px] overflow-hidden bg-slate-950 flex items-center justify-center select-none">
+                {/* Wallpaper Full Render */}
+                <img
+                  src={previewModalWallpaper.imageUrl}
+                  alt={previewModalWallpaper.name}
+                  onError={(e) => {
+                    if ('svgFallback' in previewModalWallpaper && (previewModalWallpaper as any).svgFallback) {
+                      e.currentTarget.src = (previewModalWallpaper as any).svgFallback;
+                    }
+                  }}
+                  className="w-full h-full object-cover absolute inset-0"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-black/10" />
+
+                {/* Simulated Desktop OS Elements for Realistic Preview */}
+                {/* Top Desktop Bar */}
+                <div className="absolute top-0 left-0 right-0 h-7 bg-black/40 backdrop-blur-md border-b border-white/10 px-4 flex items-center justify-between text-[11px] text-white/90 font-medium">
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold tracking-wide">☕ CoworkingBrew OS</span>
+                    <span className="text-white/70 hidden sm:inline">Focus</span>
+                    <span className="text-white/70 hidden sm:inline">Music</span>
+                  </div>
+                  <div className="flex items-center gap-3 font-mono text-[10px]">
+                    <span>🌸 25:00 Focus</span>
+                    <span>🌿 Lofi Rain</span>
+                    <span className="bg-white/15 px-2 py-0.5 rounded-md font-bold">10:42 AM</span>
+                  </div>
+                </div>
+
+                {/* Simulated Floating Sticky Note Widget */}
+                <div className="absolute top-12 left-6 bg-amber-100/90 text-amber-950 p-3 rounded-2xl shadow-xl border border-amber-300/40 w-44 backdrop-blur-xs hidden sm:block transform -rotate-1 pointer-events-none">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-800">📌 Daily Focus</div>
+                  <div className="text-xs font-semibold mt-1">1. Ship features 🚀</div>
+                  <div className="text-xs font-semibold">2. Drink matcha 🍵</div>
+                </div>
+
+                {/* Simulated Focus Timer Widget */}
+                <div className="absolute top-12 right-6 bg-black/50 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-xl w-48 text-white text-center hidden sm:block pointer-events-none">
+                  <div className="text-[10px] text-purple-300 uppercase tracking-wider font-bold">⏱️ Sprint Timer</div>
+                  <div className="text-2xl font-bold font-mono-timer text-amber-300 mt-0.5">24:18</div>
+                  <div className="text-[10px] text-emerald-300">🌿 Deep Focus Mode</div>
+                </div>
+
+                {/* Simulated Dock at Bottom */}
+                <div className="absolute bottom-4 bg-black/45 backdrop-blur-xl border border-white/20 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-2xl pointer-events-none">
+                  <div className="w-8 h-8 rounded-xl bg-purple-600 flex items-center justify-center text-sm shadow">📝</div>
+                  <div className="w-8 h-8 rounded-xl bg-amber-600 flex items-center justify-center text-sm shadow">🛍️</div>
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-sm shadow">🌐</div>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-600 flex items-center justify-center text-sm shadow">🎧</div>
+                  <div className="w-8 h-8 rounded-xl bg-rose-600 flex items-center justify-center text-sm shadow">🐾</div>
+                </div>
+
+                {/* Cycling Navigation Buttons */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const filtered = WALLPAPERS.filter((wp) => wallpaperFilter === 'all' || wp.category === wallpaperFilter);
+                    const currIdx = filtered.findIndex((w) => w.id === previewModalWallpaper.id);
+                    const prevIdx = (currIdx - 1 + filtered.length) % filtered.length;
+                    setPreviewModalWallpaper(filtered[prevIdx]);
+                  }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 backdrop-blur-md shadow-xl transition-transform hover:scale-110"
+                >
+                  <ChevronLeft className="w-6 h-6" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const filtered = WALLPAPERS.filter((wp) => wallpaperFilter === 'all' || wp.category === wallpaperFilter);
+                    const currIdx = filtered.findIndex((w) => w.id === previewModalWallpaper.id);
+                    const nextIdx = (currIdx + 1) % filtered.length;
+                    setPreviewModalWallpaper(filtered[nextIdx]);
+                  }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center border border-white/20 backdrop-blur-md shadow-xl transition-transform hover:scale-110"
+                >
+                  <ChevronRight className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Modal Bottom Control Bar */}
+              <div className="bg-[#18132b] border-t border-purple-800/40 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="space-y-1 text-center sm:text-left">
+                  <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <h3 className="text-base font-bold text-white">{previewModalWallpaper.name}</h3>
+                    <span className="px-2 py-0.5 rounded-full bg-pink-900/60 border border-pink-700/50 text-[10px] text-pink-300 font-mono">
+                      {previewModalWallpaper.category.toUpperCase()}
+                    </span>
+                    {activeWallpaper === previewModalWallpaper.id && (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-600/40 text-[10px] text-emerald-300 font-bold flex items-center gap-1">
+                        <Check className="w-3 h-3 stroke-[3]" />
+                        CURRENTLY ACTIVE
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-purple-300/80 max-w-xl">{previewModalWallpaper.desc}</p>
+                </div>
+
+                {/* Modal Buttons */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-sm font-mono-timer font-bold text-amber-300">
+                    {previewModalWallpaper.cost === 0 ? 'Free Default' : `🎟️ ${previewModalWallpaper.cost} Credits`}
+                  </span>
+
+                  <button
+                    onClick={() => {
+                      onSelectWallpaper(previewModalWallpaper);
+                      if (unlockedWallpapers.includes(previewModalWallpaper.id) || previewModalWallpaper.cost === 0) {
+                        setPreviewModalWallpaper(null);
+                      }
+                    }}
+                    className={`px-5 py-2.5 rounded-2xl text-xs font-bold transition-all shadow-lg flex items-center gap-2 ${
+                      activeWallpaper === previewModalWallpaper.id
+                        ? 'bg-pink-600 text-white ring-2 ring-pink-400/50'
+                        : unlockedWallpapers.includes(previewModalWallpaper.id)
+                        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-purple-950/60 active:scale-95'
+                        : tickets >= previewModalWallpaper.cost
+                        ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 active:scale-95'
+                        : 'bg-purple-900/40 text-purple-400 cursor-not-allowed'
+                    }`}
+                  >
+                    {activeWallpaper === previewModalWallpaper.id ? (
+                      <>
+                        <Check className="w-4 h-4 stroke-[3]" />
+                        <span>Applied to Workstation</span>
+                      </>
+                    ) : unlockedWallpapers.includes(previewModalWallpaper.id) ? (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Apply to Workstation</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingBag className="w-4 h-4" />
+                        <span>Unlock Wallpaper (🎟️ {previewModalWallpaper.cost})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

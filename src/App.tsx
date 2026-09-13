@@ -37,15 +37,28 @@ import { StatisticsModal } from './components/StatisticsModal';
 import { RoomLobbyModal } from './components/RoomLobbyModal';
 import { BookshelfModal } from './components/BookshelfModal';
 import { AuthModal } from './components/AuthModal';
+import { UserNametagModal } from './components/UserNametagModal';
+import { DirectMessageModal } from './components/DirectMessageModal';
 import { DisplayModeBar } from './components/DisplayModeBar';
 import { StickerWidget } from './components/StickerWidget';
 import { DockedSidebar } from './components/DockedSidebar';
 import { soundEngine } from './utils/audioSynth';
+import { ALL_ROOM_SERVERS, THEME_BOTS } from './data/roomServers';
 import {
   auth,
   saveFirebaseUserProfile,
   getFirebaseUserProfile,
   FirebaseUserProfile,
+  listenRoomPresences,
+  setRoomPresence,
+  removeRoomPresence,
+  saveFriendship,
+  deleteFriendship,
+  getUserFriends,
+  listenUserDirectMessages,
+  sendDirectMessage,
+  DirectMessage,
+  RoomPresence,
 } from './firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import {
@@ -60,6 +73,7 @@ import {
   Volume2,
   VolumeX,
   User as UserIcon,
+  MessageSquare,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -117,20 +131,28 @@ export default function App() {
   // --- Display & Environment State ---
   const [displayMode, setDisplayMode] = useState<DisplayMode>('full');
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
-  const [currentRoom, setCurrentRoom] = useState<CoWorkingRoom>({
-    id: 'room-office-1',
-    name: '🏢 Open-Plan Studio Office',
-    code: 'OFFICE-1042',
-    theme: 'office',
-    topic: 'Sprint Deep Work & Collaborative Flow',
-    timeOfDay: 'day',
-    isPrivate: false,
-    creatorName: 'Alex',
-    maxCapacity: 6,
+  const [currentRoom, setCurrentRoom] = useState<CoWorkingRoom>(() => ALL_ROOM_SERVERS[0]);
+  const [userDeskIndex, setUserDeskIndex] = useState<number>(1);
+
+  // --- Peers / Multiplayer Co-Workers & Bot Presence ---
+  const [peers, setPeers] = useState<RoomPeer[]>(() => {
+    const defaultBot = THEME_BOTS[ALL_ROOM_SERVERS[0].theme] || THEME_BOTS.office;
+    return [defaultBot];
   });
 
-  // --- Peers / Multiplayer Co-Workers ---
-  const [peers, setPeers] = useState<RoomPeer[]>(initialCoWorkers);
+  // --- Social & Direct Messaging State ---
+  const [selectedPeerForModal, setSelectedPeerForModal] = useState<RoomPeer | null>(null);
+  const [isNametagModalOpen, setIsNametagModalOpen] = useState(false);
+  const [activeDmPeer, setActiveDmPeer] = useState<RoomPeer | null>(null);
+  const [isDmModalOpen, setIsDmModalOpen] = useState(false);
+  const [friendsList, setFriendsList] = useState<{ id: string; name: string; avatarUrl?: string }[]>(() => {
+    const saved = localStorage.getItem('ontogether_friends');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>(() => {
+    const saved = localStorage.getItem('ontogether_direct_messages');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   // --- Pomodoro Settings & State ---
   const [pomodoroSettings, setPomodoroSettings] = useState<PomodoroSettings>(() => {
@@ -337,8 +359,10 @@ export default function App() {
 
   // --- User as a Peer in the Room ---
   const activeTask = tasks.find((t) => t.id === activeTaskId);
+  const myUserId = currentUser?.uid || 'user-me';
+
   const userPeer: RoomPeer = {
-    id: 'user-me',
+    id: myUserId,
     name: avatar.name?.trim() ? avatar.name : 'You',
     isUser: true,
     avatar,
@@ -347,11 +371,240 @@ export default function App() {
     focusMinutesToday: totalFocusMinutes,
     streakDays: currentStreak,
     tickets,
-    deskIndex: 0,
+    deskIndex: userDeskIndex,
     reactionEmoji: userReactionEmoji || undefined,
   };
 
   const allRoomPeers = [userPeer, ...peers];
+
+  // --- Multiplayer Room Presence & Bot Integration ---
+  useEffect(() => {
+    // 1. Get room-specific bot (always placed at Desk 0)
+    const roomTheme = currentRoom.theme || 'office';
+    const themeBot = THEME_BOTS[roomTheme] || THEME_BOTS.office;
+
+    // 2. Subscribe to real-time remote coworker presences in current room
+    const unsubscribePresence = listenRoomPresences(currentRoom.id, (presences) => {
+      // Remote peers excluding current user
+      const remotePresences = presences.filter((p) => p.userId !== myUserId);
+
+      // Determine available player desk indices (1 to 5)
+      const occupiedDesks = new Set<number>(remotePresences.map((p) => p.deskIndex));
+      let assignedDesk = userDeskIndex;
+      if (occupiedDesks.has(assignedDesk) || assignedDesk === 0) {
+        for (let i = 1; i <= 5; i++) {
+          if (!occupiedDesks.has(i)) {
+            assignedDesk = i;
+            break;
+          }
+        }
+        setUserDeskIndex(assignedDesk);
+      }
+
+      // Convert remote presences into RoomPeer objects
+      const remotePeers: RoomPeer[] = remotePresences.map((p) => {
+        let pAvatar = initialUserAvatar;
+        let pDesk = initialUserDesk;
+        try {
+          if (p.avatarConfigJson) pAvatar = JSON.parse(p.avatarConfigJson);
+          if (p.deskConfigJson) pDesk = JSON.parse(p.deskConfigJson);
+        } catch (e) {
+          // fallback default
+        }
+
+        return {
+          id: p.userId,
+          name: p.userName || 'Co-Worker',
+          isUser: false,
+          avatar: pAvatar,
+          desk: pDesk,
+          currentTask: p.status || 'Focusing',
+          focusMinutesToday: 45,
+          streakDays: 3,
+          tickets: 20,
+          deskIndex: p.deskIndex,
+          isOnline: Date.now() - (typeof p.lastSeen === 'number' ? p.lastSeen : new Date(p.lastSeen).getTime()) < 60000,
+        };
+      });
+
+      // The room consists of ONE designated theme bot (Desk 0) + any real remote coworkers (Desks 1-5)
+      setPeers([themeBot, ...remotePeers]);
+    });
+
+    // 3. Register / heartbeat current user's presence in this room server
+    const heartbeat = () => {
+      setRoomPresence({
+        roomId: currentRoom.id,
+        userId: myUserId,
+        userName: avatar.name || 'You',
+        avatarConfigJson: JSON.stringify(avatar),
+        deskConfigJson: JSON.stringify(desk),
+        deskIndex: userDeskIndex,
+        status: activeTask ? activeTask.title : avatar.statusText,
+        lastSeen: Date.now(),
+      }).catch((err) => console.warn('Room presence heartbeat notice:', err));
+    };
+
+    heartbeat();
+    const heartbeatInterval = window.setInterval(heartbeat, 15000);
+
+    return () => {
+      unsubscribePresence();
+      window.clearInterval(heartbeatInterval);
+      removeRoomPresence(currentRoom.id, myUserId).catch(() => {});
+    };
+  }, [currentRoom.id, currentRoom.theme, myUserId, avatar, desk, activeTask, userDeskIndex]);
+
+  // --- Real-time Direct Messaging Listener ---
+  useEffect(() => {
+    if (currentUser) {
+      const unsub = listenUserDirectMessages(currentUser.uid, (dms) => {
+        setDirectMessages(dms);
+      });
+      return () => unsub();
+    }
+  }, [currentUser]);
+
+  // Save DMs and friends to localStorage
+  useEffect(() => {
+    localStorage.setItem('ontogether_direct_messages', JSON.stringify(directMessages));
+  }, [directMessages]);
+
+  useEffect(() => {
+    localStorage.setItem('ontogether_friends', JSON.stringify(friendsList));
+  }, [friendsList]);
+
+  // Load cloud friends on user login
+  useEffect(() => {
+    if (currentUser) {
+      getUserFriends(currentUser.uid).then((friends) => {
+        if (friends && friends.length > 0) {
+          setFriendsList(
+            friends.map((f) => ({
+              id: f.friendUserId,
+              name: f.friendName,
+            }))
+          );
+        }
+      });
+    }
+  }, [currentUser]);
+
+  // Handle Send Direct Message (supports both real users & intelligent theme bot auto-responses!)
+  const handleSendMessage = async (targetUserId: string, targetUserName: string, text: string) => {
+    const newMsg: DirectMessage = {
+      id: `dm-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      senderId: myUserId,
+      senderName: avatar.name || 'You',
+      recipientId: targetUserId,
+      recipientName: targetUserName,
+      text: text,
+      content: text,
+      createdAt: Date.now(),
+      read: true,
+    };
+
+    setDirectMessages((prev) => [...prev, newMsg]);
+
+    // If logged in to Firebase, push to cloud
+    if (currentUser) {
+      await sendDirectMessage(myUserId, avatar.name || 'You', targetUserId, targetUserName, text);
+    }
+
+    // If target is a Room Bot, generate a cozy automated response!
+    if (targetUserId.startsWith('bot-')) {
+      const botTheme = currentRoom.theme || 'office';
+      const botReplies: Record<string, string[]> = {
+        tea_loft: [
+          '🍵 *Sips matcha peacefully* Great to focus together! Remember to breathe deeply and stay hydrated.',
+          '🌸 Quiet focus is the best kind of energy. Let’s finish this pomodoro sprint with calmness!',
+          '✨ Warm greetings from the tatami loft. You are doing fantastic work today!',
+        ],
+        treehouse: [
+          '🌿 *Leaves rustle gently in the breeze* Keep up that creative momentum! The canopy view is lovely today.',
+          '🐿️ Sending high focus vibes up into the branches! Let’s crush this task list together.',
+          '🍃 Beautiful rhythm you’ve got going! Stay in that awesome flow state.',
+        ],
+        lilypad: [
+          '🌙 *Gentle water ripples in the moonlight* The fireflies are glowing. Keep going, star traveler!',
+          '✨ Peaceful twilight energy for your deep work session. You’re making real progress tonight!',
+          '🪐 Deep work under starry skies. Let’s conquer that milestone!',
+        ],
+        cafe: [
+          '☕ *Fresh espresso brewed & steam swirls* Here’s a virtual latte for your focus sprint!',
+          '🥐 Cozy cafe ambiance for the win! Getting things done one sip at a time.',
+          '🎵 The coffee aroma and lofi rain beats are in full sync. Proud of your hustle!',
+        ],
+        arcade: [
+          '🕹️ *Pixel victory chime plays* Focus combo multiplier: 10X! High score incoming!',
+          '👾 Game on! Keep that energetic productivity power-up going strong.',
+          '⚡ Boss level unlocked: Task Completion! You got this, champion!',
+        ],
+        greenhouse: [
+          '🌱 *Fresh botanical breeze* Water your mind with some quiet focus! Every small step grows into something big.',
+          '🌿 The orchids and ferns are blooming. Let’s make this study session blossom!',
+          '🌻 Steady growth beats rushing every time. Wonderful work today!',
+        ],
+        office: [
+          '📊 *Clacking mechanical keys* Sprint mode engaged! Let’s knock out this milestone together.',
+          '💼 Excellent pace! Take quick micro-breaks to stretch and keep that sharpness.',
+          '🚀 Collaborative synergy at 100%. Let’s finish strong!',
+        ],
+      };
+
+      const repliesList = botReplies[botTheme] || botReplies.office;
+      const botResponseText = repliesList[Math.floor(Math.random() * repliesList.length)];
+
+      setTimeout(() => {
+        soundEngine.playChime('bell');
+        const botReplyMsg: DirectMessage = {
+          id: `dm-bot-reply-${Date.now()}`,
+          senderId: targetUserId,
+          senderName: targetUserName,
+          recipientId: myUserId,
+          recipientName: avatar.name || 'You',
+          text: botResponseText,
+          content: botResponseText,
+          createdAt: Date.now(),
+          read: false,
+        };
+        setDirectMessages((prev) => [...prev, botReplyMsg]);
+      }, 1200);
+    }
+  };
+
+  // Toggle Friend handler
+  const handleToggleFriend = async (peer: RoomPeer) => {
+    const isAlreadyFriend = friendsList.some((f) => f.id === peer.id);
+    if (isAlreadyFriend) {
+      setFriendsList((prev) => prev.filter((f) => f.id !== peer.id));
+      if (currentUser) {
+        await deleteFriendship(currentUser.uid, peer.id);
+      }
+      soundEngine.playChime('bell');
+    } else {
+      setFriendsList((prev) => [...prev, { id: peer.id, name: peer.name }]);
+      if (currentUser) {
+        await saveFriendship(currentUser.uid, currentUser.displayName || 'You', peer.id, peer.name);
+      }
+      soundEngine.playCoin();
+      confetti({ particleCount: 25, spread: 50 });
+      setTickets((t) => t + 5);
+    }
+  };
+
+  // Open Nametag Modal
+  const handleSelectPeer = (peer: RoomPeer) => {
+    setSelectedPeerForModal(peer);
+    setIsNametagModalOpen(true);
+  };
+
+  // Open Direct Message Modal from Nametag
+  const handleOpenPmFromNametag = (peer: RoomPeer) => {
+    setIsNametagModalOpen(false);
+    setActiveDmPeer(peer);
+    setIsDmModalOpen(true);
+  };
 
   // --- Pomodoro Countdown Timer Loop ---
   useEffect(() => {
@@ -645,6 +898,7 @@ export default function App() {
           onSendCoffee={handleSendCoffee}
           onPeerPetClick={() => handlePetInteraction()}
           onOpenCustomizer={() => setIsCustomizerOpen(true)}
+          onSelectPeer={handleSelectPeer}
         />
 
         {/* Floating Zen Controls */}
@@ -681,6 +935,40 @@ export default function App() {
         </div>
 
         {/* Modals in Zen Mode */}
+        <UserNametagModal
+          isOpen={isNametagModalOpen}
+          peer={selectedPeerForModal}
+          isFriend={friendsList.some((f) => f.id === selectedPeerForModal?.id)}
+          onClose={() => setIsNametagModalOpen(false)}
+          onToggleFriend={handleToggleFriend}
+          onOpenPm={handleOpenPmFromNametag}
+          onSendReactionToPeer={(peer, emoji) => handleSendReaction(emoji)}
+        />
+        <DirectMessageModal
+          isOpen={isDmModalOpen}
+          onClose={() => setIsDmModalOpen(false)}
+          targetPeer={activeDmPeer || peers[0] || userPeer}
+          currentUserId={myUserId}
+          currentUserName={avatar.name || 'You'}
+          messages={directMessages}
+          onSendMessage={handleSendMessage}
+          friendsList={friendsList}
+          onSelectFriendChat={(peerId) => {
+            const foundPeer = allRoomPeers.find((p) => p.id === peerId) || {
+              id: peerId,
+              name: friendsList.find((f) => f.id === peerId)?.name || 'Friend',
+              isUser: false,
+              avatar: initialUserAvatar,
+              desk: initialUserDesk,
+              currentTask: 'Online Friend',
+              focusMinutesToday: 0,
+              streakDays: 1,
+              tickets: 0,
+              deskIndex: 1,
+            };
+            setActiveDmPeer(foundPeer);
+          }}
+        />
         <AmbientSoundMixer
           isOpen={isMixerOpen}
           onClose={() => setIsMixerOpen(false)}
@@ -767,6 +1055,22 @@ export default function App() {
               <Trophy className="w-3.5 h-3.5 text-orange-400" />
               <span>Stats & Growth</span>
             </button>
+
+            <button
+              onClick={() => {
+                if (!activeDmPeer && peers.length > 0) {
+                  setActiveDmPeer(peers[0]);
+                }
+                setIsDmModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/60 border border-purple-700/40 text-purple-200 text-xs font-cozy font-medium transition-all shadow-sm relative"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-pink-400" />
+              <span>Messages & DMs</span>
+              {directMessages.some((m) => !m.read && m.recipientId === myUserId) && (
+                <span className="w-2 h-2 rounded-full bg-pink-500 animate-pulse absolute -top-0.5 -right-0.5" />
+              )}
+            </button>
           </div>
 
           {/* Right Status & Display Mode Switcher */}
@@ -850,6 +1154,7 @@ export default function App() {
           onUpdateDesk={setDesk}
           focusMinutesToday={totalFocusMinutes}
           streakDays={currentStreak}
+          onSelectPeer={handleSelectPeer}
         />
 
         {/* Bottom Productivity Grid */}
@@ -1004,6 +1309,42 @@ export default function App() {
         totalFocusMinutes={totalFocusMinutes}
         streakDays={currentStreak}
         onTriggerSync={handleCloudSync}
+      />
+
+      <UserNametagModal
+        isOpen={isNametagModalOpen}
+        peer={selectedPeerForModal}
+        isFriend={friendsList.some((f) => f.id === selectedPeerForModal?.id)}
+        onClose={() => setIsNametagModalOpen(false)}
+        onToggleFriend={handleToggleFriend}
+        onOpenPm={handleOpenPmFromNametag}
+        onSendReactionToPeer={(peer, emoji) => handleSendReaction(emoji)}
+      />
+
+      <DirectMessageModal
+        isOpen={isDmModalOpen}
+        onClose={() => setIsDmModalOpen(false)}
+        targetPeer={activeDmPeer || peers[0] || userPeer}
+        currentUserId={myUserId}
+        currentUserName={avatar.name || 'You'}
+        messages={directMessages}
+        onSendMessage={handleSendMessage}
+        friendsList={friendsList}
+        onSelectFriendChat={(peerId) => {
+          const foundPeer = allRoomPeers.find((p) => p.id === peerId) || {
+            id: peerId,
+            name: friendsList.find((f) => f.id === peerId)?.name || 'Friend',
+            isUser: false,
+            avatar: initialUserAvatar,
+            desk: initialUserDesk,
+            currentTask: 'Online Friend',
+            focusMinutesToday: 0,
+            streakDays: 1,
+            tickets: 0,
+            deskIndex: 1,
+          };
+          setActiveDmPeer(foundPeer);
+        }}
       />
     </div>
   );
