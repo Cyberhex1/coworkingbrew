@@ -1,0 +1,6 @@
+{
+  "name": "CoworkingBrew",
+  "description": "A cozy 3D pixelated virtual co-working space featuring cubicle desks, interactive voxel avatars, customizable OS workstation, Pomodoro focus rooms, lofi audio, task planner, bookshelf reader, and companion pets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
