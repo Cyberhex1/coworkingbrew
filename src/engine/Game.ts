@@ -7,7 +7,7 @@ import { Particles } from './particles';
 import { THEME_BY_ID, type ThemeId, type RoomTheme } from './themes';
 import type { AvatarConfig, PetKind, AnimState } from './avatarTypes';
 import { screenTexture, whiteboardTexture } from './textures';
-import { VoxBuilder, meshFrom, glowMat } from './vox';
+import { VoxBuilder, meshFrom, glowMat, toonMat, glassMat } from './vox';
 import { LAYER_NO_OUTLINE } from './pipeline';
 import { randomAvatar, NPC_PROFILES } from './npcs';
 
@@ -167,9 +167,17 @@ export class Game {
   loadRoom(themeId: ThemeId) {
     if (this.room) {
       this.scene.remove(this.room.group);
+      const shared = new Set<THREE.Material>([toonMat(), glowMat(), glassMat()]);
       this.room.group.traverse((o) => {
         const m = o as THREE.Mesh;
-        if (m.isMesh) m.geometry.dispose();
+        if (!m.isMesh) return;
+        m.geometry.dispose();
+        for (const mat of Array.isArray(m.material) ? m.material : [m.material]) {
+          if (shared.has(mat)) continue;
+          const map = (mat as THREE.MeshBasicMaterial).map;
+          if (map) map.dispose();
+          mat.dispose();
+        }
       });
     }
     this.theme = THEME_BY_ID[themeId];
@@ -181,8 +189,12 @@ export class Game {
     // reset actors' positions to spawn / seats
     for (const a of this.actors.values()) {
       if (a.kind === 'player') {
-        this.placeAt(a, this.room.spawn.x, this.room.spawn.z, this.room.spawn.facing);
+        const wasSeated = !!a.seat;
         a.seat = null; a.seatId = null; a.sitBlend = 0;
+        a.pendingInteract = null; a.pendingSeat = null;
+        a.rig.state = 'idle';
+        this.placeAt(a, this.room.spawn.x, this.room.spawn.z, this.room.spawn.facing);
+        if (wasSeated) this.emit({ type: 'stood' });
       }
     }
     this.refreshNpcs();
@@ -287,7 +299,10 @@ export class Game {
     if (!a) return;
     this.scene.remove(a.rig.root);
     disposeAvatar(a.rig);
-    if (a.petRig) this.scene.remove(a.petRig.root);
+    if (a.petRig) {
+      this.scene.remove(a.petRig.root);
+      a.petRig.root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) m.geometry.dispose(); });
+    }
     a.labelEl.remove();
     a.bubbleEl.remove();
     this.actors.delete(id);

@@ -116,17 +116,19 @@ export async function sendRoomChat(m: Omit<RoomChat, 'id' | 'timestamp'>) {
 
 export function listenRoomChat(roomId: string, fn: (list: RoomChat[]) => void) {
   const base = collection(db, 'room_chats');
+  let disposed = false;
   let unsub = onSnapshot(
     query(base, where('roomId', '==', roomId), orderBy(documentId(), 'desc'), limit(40)),
     (snap) => fn(snap.docs.map((d) => d.data() as RoomChat).sort((a, b) => a.timestamp - b.timestamp)),
     () => {
+      if (disposed) return;
       // fall back to an unordered query if the index is missing
       unsub = onSnapshot(query(base, where('roomId', '==', roomId)), (snap) =>
         fn(snap.docs.map((d) => d.data() as RoomChat).sort((a, b) => a.timestamp - b.timestamp).slice(-40)),
       );
     },
   );
-  return () => unsub();
+  return () => { disposed = true; unsub(); };
 }
 
 // ---------------------------------------------------------------- direct messages

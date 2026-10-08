@@ -25,7 +25,11 @@ const LS_KEY = 'cb:brewos-windows-v2';
 function loadWins(): Win[] {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (raw) return JSON.parse(raw) as Win[];
+    if (raw) {
+      // renumber z 1..n so it never creeps above the taskbar
+      const ws = (JSON.parse(raw) as Win[]).filter((w) => w.id in APPS);
+      return [...ws].sort((a, b) => a.z - b.z).map((w, i) => ({ ...w, z: i + 1 }));
+    }
   } catch { /* ignore */ }
   return [
     { id: 'timer', x: 100, y: 16, w: APPS.timer.w, h: APPS.timer.h, z: 2, min: false },
@@ -61,14 +65,24 @@ export default function BrewOS() {
     setStartOpen(false);
     setWins((ws) => {
       const ex = ws.find((w) => w.id === id);
-      if (ex) return ws.map((w) => (w.id === id ? { ...w, min: false, z: topZ + 1 } : w));
       const n = ws.length;
-      return [...ws, { id, x: 110 + n * 26, y: 24 + n * 22, w: APPS[id].w, h: APPS[id].h, z: topZ + 1, min: false }];
+      if (ex) return ws;
+      return [...ws, { id, x: 110 + n * 26, y: 24 + n * 22, w: APPS[id].w, h: APPS[id].h, z: n + 1, min: false }];
     });
+    focusWin(id);
   };
   const close = (id: AppId) => { audio.sfx('close'); setWins((ws) => ws.filter((w) => w.id !== id)); };
-  const focusWin = (id: AppId) => setWins((ws) => ws.map((w) => (w.id === id ? { ...w, z: topZ + 1 } : w)));
-  const minimize = (id: AppId) => setWins((ws) => ws.map((w) => (w.id === id ? { ...w, min: !w.min, z: topZ + 1 } : w)));
+  const focusWin = (id: AppId) => setWins((ws) => {
+    const top = Math.max(0, ...ws.map((w) => w.z));
+    const cur = ws.find((w) => w.id === id);
+    if (!cur || (cur.z === top && !cur.min)) return ws;
+    // re-stack 1..n with this window on top
+    const order = ws.filter((w) => w.id !== id).sort((a, b) => a.z - b.z);
+    const z = new Map(order.map((w, i) => [w.id, i + 1]));
+    z.set(id, order.length + 1);
+    return ws.map((w) => ({ ...w, z: z.get(w.id)!, min: w.id === id ? false : w.min }));
+  });
+  const minimize = (id: AppId) => setWins((ws) => ws.map((w) => (w.id === id ? { ...w, min: !w.min } : w)));
 
   const drag = (id: AppId, e: React.PointerEvent) => {
     if (mobile) return;
@@ -171,7 +185,7 @@ export default function BrewOS() {
                 </button>
                 <div className="flex-1 flex gap-1 overflow-x-auto">
                   {wins.map((w) => (
-                    <button key={w.id} className="px-btn px-btn-sm max-w-[150px] shrink-0" data-active={!w.min && w.z === topZ} onClick={() => (w.min || w.z !== topZ ? (setWins((ws) => ws.map((x) => (x.id === w.id ? { ...x, min: false, z: topZ + 1 } : x)))) : minimize(w.id))}>
+                    <button key={w.id} className="px-btn px-btn-sm max-w-[150px] shrink-0" data-active={!w.min && w.z === topZ} onClick={() => (w.min || w.z !== topZ ? focusWin(w.id) : minimize(w.id))}>
                       <PixelIcon name={APPS[w.id].icon} size={14} /><span className="truncate hidden sm:inline">{APPS[w.id].title}</span>
                     </button>
                   ))}

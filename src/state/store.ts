@@ -87,6 +87,8 @@ export interface FocusState {
   remainingMs: number;
   cycle: number; // focus sessions completed in this set
   taskId: string | null;
+  totalMs?: number; // length of the session as started (settings changes mid-session don't count)
+  boost?: number; // drink boost active when the session started
 }
 
 interface AppState {
@@ -117,10 +119,12 @@ interface AppState {
   sessions: Session[];
   // misc progress
   library: BookEntry[];
+  claimedBooks: number[]; // books that already paid out (survives removing them from the shelf)
   hydration: { date: string; glasses: number };
   caps: { date: string; taskTickets: number; gameTickets: number };
   ticketsEarned: number;
   achievements: string[];
+  localChangedAt: number; // last time tickets/unlocks/look changed locally (for cloud merge)
   counters: { drinks: number; snacks: number; games: number; books: number; prints: number };
   settings: Settings;
 
@@ -205,19 +209,23 @@ export const useApp = create<AppState>()(
       focus: { mode: 'focus', running: false, endsAt: null, remainingMs: 25 * 60_000, cycle: 0, taskId: null },
       sessions: [],
       library: [],
+      claimedBooks: [],
       hydration: { date: today(), glasses: 0 },
       caps: { date: today(), taskTickets: 0, gameTickets: 0 },
       ticketsEarned: 0,
       achievements: [],
+      localChangedAt: 0,
       counters: { drinks: 0, snacks: 0, games: 0, books: 0, prints: 0 },
       settings: defaultSettings,
 
       set: (p) => set(p),
       setSettings: (p) => {
-        const s = { ...get().settings, ...p };
+        const old = get().settings;
+        const s = { ...old, ...p };
         set({ settings: s });
         const f = get().focus;
-        if (!f.running && f.endsAt === null && ('focusMin' in p || 'shortMin' in p || 'longMin' in p)) {
+        // only re-sync an untouched timer (never wipe a paused session's progress)
+        if (!f.running && f.endsAt === null && f.remainingMs === durations(old, f.mode) && ('focusMin' in p || 'shortMin' in p || 'longMin' in p)) {
           set({ focus: { ...f, remainingMs: durations(s, f.mode) } });
         }
       },
@@ -291,7 +299,15 @@ export const useApp = create<AppState>()(
         const s = get();
         const m = mode ?? s.focus.mode;
         const ms = mode && mode !== s.focus.mode ? durations(s.settings, m) : s.focus.endsAt === null && !s.focus.running && s.focus.remainingMs > 0 ? s.focus.remainingMs : durations(s.settings, m);
-        set({ focus: { ...s.focus, mode: m, running: true, endsAt: Date.now() + ms, remainingMs: ms } });
+        const fresh = !(s.focus.endsAt === null && !s.focus.running && s.focus.remainingMs > 0 && s.focus.remainingMs < durations(s.settings, m) && m === s.focus.mode);
+        const boost = s.buff && s.buff.until > Date.now() ? DRINKS.find((d) => d.id === s.buff!.drinkId)?.boost ?? 0 : 0;
+        set({
+          focus: {
+            ...s.focus, mode: m, running: true, endsAt: Date.now() + ms, remainingMs: ms,
+            totalMs: fresh || !s.focus.totalMs ? ms : s.focus.totalMs,
+            boost: fresh || s.focus.boost == null ? boost : s.focus.boost,
+          },
+        });
       },
       pauseFocus: () => {
         const f = get().focus;
@@ -316,13 +332,13 @@ export const useApp = create<AppState>()(
         const s = get();
         const f = s.focus;
         if (!f.running) return null;
-        const minutes = Math.round(durations(s.settings, f.mode) / 60_000);
+        const minutes = Math.round((f.totalMs ?? durations(s.settings, f.mode)) / 60_000);
         let tickets = 0;
         let cycle = f.cycle;
         let next: FocusMode;
         if (f.mode === 'focus') {
           cycle += 1;
-          const boost = s.buff && s.buff.until > Date.now() ? DRINKS.find((d) => d.id === s.buff!.drinkId)?.boost ?? 0 : 0;
+          const boost = f.boost ?? 0;
           tickets = Math.max(1, Math.round((minutes / 5) * ECONOMY.focusTicketsPer5Min * (1 + boost)));
           set((st) => ({
             sessions: [...st.sessions, { at: Date.now(), minutes, taskId: f.taskId }].slice(-2000),
@@ -347,9 +363,10 @@ export const useApp = create<AppState>()(
       saveJournal: (e) => {
         const existing = get().journal.find((j) => j.date === e.date);
         const rewarded = existing?.rewarded ?? false;
-        const entry: JournalEntry = { ...e, rewarded: true };
+        const qualifies = e.text.trim().length > 10 || e.gratitude.trim().length > 3;
+        const entry: JournalEntry = { ...e, rewarded: rewarded || qualifies };
         set((s) => ({ journal: [entry, ...s.journal.filter((j) => j.date !== e.date)].slice(0, 400) }));
-        if (!rewarded && (e.text.trim().length > 10 || e.gratitude.trim().length > 3)) get().earn(ECONOMY.journalDaily, 'journal entry');
+        if (!rewarded && qualifies) get().earn(ECONOMY.journalDaily, 'journal entry');
         else toast('Journal saved', 'success');
       },
       addBlock: (b) => set((s) => ({ blocks: [...s.blocks, { ...b, id: uid() }] })),
@@ -394,12 +411,16 @@ export const useApp = create<AppState>()(
         if (ex) {
           const merged = { ...ex, ...b };
           set({ library: lib.map((x) => (x.id === b.id ? merged : x)) });
-          if (merged.status === 'done' && !ex.claimed) {
-            set((s) => ({ library: s.library.map((x) => (x.id === b.id ? { ...x, claimed: true } : x)), counters: { ...s.counters, books: s.counters.books + 1 } }));
+          if (merged.status === 'done' && !ex.claimed && !get().claimedBooks.includes(b.id)) {
+            set((s) => ({
+              library: s.library.map((x) => (x.id === b.id ? { ...x, claimed: true } : x)),
+              claimedBooks: [...s.claimedBooks, b.id],
+              counters: { ...s.counters, books: s.counters.books + 1 },
+            }));
             get().earn(ECONOMY.bookFinished, `finished "${merged.title}"`);
           }
         } else {
-          const entry: BookEntry = { title: 'Untitled', author: 'Unknown', status: 'want', position: 0, notes: '', claimed: false, addedAt: Date.now(), ...b };
+          const entry: BookEntry = { title: 'Untitled', author: 'Unknown', status: 'want', position: 0, notes: '', addedAt: Date.now(), ...b, claimed: get().claimedBooks.includes(b.id) };
           set({ library: [entry, ...lib] });
         }
       },
@@ -427,6 +448,14 @@ export const useApp = create<AppState>()(
     },
   ),
 );
+
+// Stamp local changes to the things that sync to the cloud, so sign-in can
+// tell whether the cloud copy or this browser is newer.
+useApp.subscribe((s, p) => {
+  if (s.tickets !== p.tickets || s.unlocked !== p.unlocked || s.avatar !== p.avatar || s.deskDecor !== p.deskDecor || s.pet !== p.pet || s.wallpaper !== p.wallpaper) {
+    if (s.localChangedAt === p.localChangedAt) useApp.setState({ localChangedAt: Date.now() });
+  }
+});
 
 function rollCaps(c: AppState['caps']) {
   return c.date === today() ? c : { date: today(), taskTickets: 0, gameTickets: 0 };

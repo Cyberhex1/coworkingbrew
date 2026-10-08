@@ -1,3 +1,4 @@
+import { NumField } from '../../NumField';
 import { useApp, type FocusMode } from '../../../state/store';
 import { useNow, fmt } from '../../HUD';
 import { PixelIcon } from '../../PixelIcon';
@@ -71,7 +72,7 @@ export default function TimerApp() {
           {([['focusMin', 'Focus (min)', 5, 90], ['shortMin', 'Short break', 1, 30], ['longMin', 'Long break', 5, 60], ['longEvery', 'Long break every', 2, 8]] as const).map(([k, l, min, max]) => (
             <label key={k} className="flex items-center justify-between gap-2">
               {l}
-              <input type="number" className="px-input w-[64px] py-0.5 text-[13px]" min={min} max={max} value={settings[k]} onChange={(e) => app.setSettings({ [k]: Math.max(min, Math.min(max, Number(e.target.value) || min)) })} />
+              <NumField value={settings[k]} min={min} max={max} onCommit={(n) => app.setSettings({ [k]: n })} />
             </label>
           ))}
           <label className="flex items-center gap-2"><input type="checkbox" className="px-check" checked={settings.autoStartBreaks} onChange={(e) => app.setSettings({ autoStartBreaks: e.target.checked })} />Auto-start breaks</label>

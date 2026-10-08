@@ -48,6 +48,8 @@ let lastSig = '';
 let bubble: { text: string; at: number } | null = null;
 let profileTimer: ReturnType<typeof setTimeout> | null = null;
 let started = false;
+let attached = false;
+let unsubProfile: (() => void) | null = null;
 
 export function initNet() {
   if (started) return;
@@ -57,6 +59,8 @@ export function initNet() {
 }
 
 async function attach() {
+  if (attached) return;
+  attached = true;
   const fb = await loadFB();
   fb.onAuth(async (u) => {
     if (u) {
@@ -75,6 +79,8 @@ async function attach() {
       });
     } else {
       localStorage.removeItem(FLAG);
+      unsubProfile?.();
+      unsubProfile = null;
       stopRoom();
       stopDMs?.();
       stopDMs = null;
@@ -90,10 +96,8 @@ export async function signIn(kind: 'google' | 'email' | 'signup', email?: string
   useNet.getState().set({ busy: true });
   try {
     const fb = await loadFB();
-    if (!started || !localStorage.getItem(FLAG)) {
-      localStorage.setItem(FLAG, '1');
-      void attach();
-    }
+    localStorage.setItem(FLAG, '1');
+    void attach();
     if (kind === 'google') await fb.signInGoogle();
     else if (kind === 'email') await fb.signInEmail(email!, pass!);
     else await fb.signUpEmail(email!, pass!, name || '');
@@ -143,7 +147,14 @@ async function syncProfileOnSignIn(fb: FBMod, user: NetUser) {
   try {
     const cloud = await fb.loadProfile(user.uid);
     const app = useApp.getState();
-    if (cloud) {
+    const cloudAt = cloud?.updatedAt ? Date.parse(cloud.updatedAt) : 0;
+    const localNewer = app.localChangedAt > cloudAt;
+    if (cloud && localNewer) {
+      // this browser has newer progress — keep it, merge unlocks, push it up
+      const unlocked = safeJson<string[]>(cloud.unlockedItemsJson) ?? [];
+      app.set({ unlocked: [...new Set([...app.unlocked, ...unlocked])], onboarded: true });
+      await pushProfile(fb, user);
+    } else if (cloud) {
       const av = safeJson<{ avatar?: AvatarConfig; pet?: PetKind; petName?: string }>(cloud.avatarConfigJson);
       const desk = safeJson<{ deskDecor?: string[]; wallpaper?: string }>(cloud.deskConfigJson);
       const unlocked = safeJson<string[]>(cloud.unlockedItemsJson) ?? [];
@@ -165,10 +176,12 @@ async function syncProfileOnSignIn(fb: FBMod, user: NetUser) {
     console.warn('[profile]', e);
   }
   // keep pushing local changes (debounced)
-  useApp.subscribe((s, p) => {
+  unsubProfile?.();
+  unsubProfile = useApp.subscribe((s, p) => {
     if (s.tickets !== p.tickets || s.avatar !== p.avatar || s.name !== p.name || s.unlocked !== p.unlocked || s.deskDecor !== p.deskDecor || s.pet !== p.pet || s.sessions !== p.sessions || s.wallpaper !== p.wallpaper) {
       if (profileTimer) clearTimeout(profileTimer);
       profileTimer = setTimeout(() => {
+        profileTimer = null;
         const u = useNet.getState().user;
         if (u) void pushProfile(fb, u);
       }, 8000);
@@ -242,7 +255,8 @@ function startRoom(fb: FBMod) {
 
 function stopRoom() {
   const u = useNet.getState().user;
-  if (presenceRoom && u) void loadFB().then((fb) => fb.deletePresence(presenceRoom!, u.uid));
+  const oldRoom = presenceRoom;
+  if (oldRoom && u) void loadFB().then((fb) => fb.deletePresence(oldRoom, u.uid));
   stopPresence?.();
   stopChat?.();
   stopPresence = null;
@@ -331,11 +345,21 @@ export async function postNote(text: string, category: string) {
   }
 }
 
-// leave the room cleanly when the tab closes
+// leave the room cleanly and flush unsaved profile changes when the tab goes away
+function flushProfile() {
+  const u = useNet.getState().user;
+  if (!u || !profileTimer || !fbPromise) return;
+  clearTimeout(profileTimer);
+  profileTimer = null;
+  void fbPromise.then((fb) => pushProfile(fb, u));
+}
 if (typeof window !== 'undefined') {
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushProfile(); });
   window.addEventListener('pagehide', () => {
+    flushProfile();
     const u = useNet.getState().user;
-    if (u && presenceRoom && fbPromise) void fbPromise.then((fb) => fb.deletePresence(presenceRoom!, u.uid));
+    const room = presenceRoom;
+    if (u && room && fbPromise) void fbPromise.then((fb) => fb.deletePresence(room, u.uid));
   });
 }
 

@@ -349,7 +349,7 @@ export function Chat() {
             onKeyDown={(e) => { if (e.key === 'Escape') useUI.getState().set({ chatOpen: false }); }}
             onBlur={() => setTimeout(() => useUI.getState().set({ chatOpen: false }), 150)}
           />
-          <button className="px-btn px-btn-sm">Send</button>
+          <button className="px-btn px-btn-sm" onMouseDown={(e) => e.preventDefault()}>Send</button>
         </form>
       ) : (
         <button className="px-btn px-btn-sm self-start" onClick={() => useUI.getState().set({ chatOpen: true })} title="Chat (Enter)">
