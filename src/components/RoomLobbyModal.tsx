@@ -106,12 +106,12 @@ export const RoomLobbyModal: React.FC<RoomLobbyModalProps> = ({
                 <h2 className="font-cozy font-bold text-lg sm:text-xl text-white tracking-wide flex items-center gap-2">
                   <span>The Study Hallway</span>
                   <span className="text-[11px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-sans font-normal">
-                    3 Servers per Room
+                    Silicon • Haven • Sakura
                   </span>
                 </h2>
               </div>
               <p className="text-xs text-amber-200/80 font-cozy mt-0.5">
-                Each room features 1 AI study bot and auto-assigns open desks for incoming coworkers across 3 regional servers.
+                Each room features 8 desks across Server Silicon, Haven, and Sakura instances.
               </p>
             </div>
           </div>
@@ -324,7 +324,7 @@ export const RoomLobbyModal: React.FC<RoomLobbyModalProps> = ({
                   </div>
                 </div>
 
-                {/* 3 Regional Server Selectors for this Room */}
+                {/* 3 Servers for this Room: Silicon, Haven, Sakura */}
                 <div className="mt-3.5 space-y-1.5 pt-2.5 border-t border-purple-900/50">
                   <div className="text-[10px] text-purple-400 font-mono uppercase tracking-wider">
                     Select Server to Join:
@@ -350,11 +350,9 @@ export const RoomLobbyModal: React.FC<RoomLobbyModalProps> = ({
                                 <span>{srv.serverName}</span>
                               </div>
                               <div className="text-[10px] text-purple-300/70 flex items-center gap-2 font-mono">
-                                <span>{srv.regionLabel}</span>
+                                <span className="text-emerald-400 font-semibold">{srv.pingMs}ms</span>
                                 <span>•</span>
-                                <span className="text-emerald-400">{srv.pingMs}ms</span>
-                                <span>•</span>
-                                <span>1 Bot + 5 Desks</span>
+                                <span>8 Desks</span>
                               </div>
                             </div>
                           </div>

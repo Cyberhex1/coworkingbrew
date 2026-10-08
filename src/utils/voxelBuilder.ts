@@ -1505,17 +1505,17 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   const exitDoorObj = buildThemedExitDoor(theme);
   roomGroup.add(exitDoorObj);
 
-  // 3. Kitchenette / Beverage Hotspot on Left Wall
+  // 3. Kitchenette / Beverage Hotspot on Left Wall (Coffee Area)
   const kitchenGroup = new THREE.Group();
   kitchenGroup.name = 'hotspot_espresso';
   kitchenGroup.userData = { hotspot: 'espresso' };
-  kitchenGroup.position.set(-roomWidth / 2 + 1.2, 0, -4.2);
-  const counterBase = createVoxelBox(1.5, 0.9, 2.8, '#334155');
+  kitchenGroup.position.set(-roomWidth / 2 + 1.2, 0, -4.6);
+  const counterBase = createVoxelBox(1.5, 0.9, 2.6, '#334155');
   counterBase.position.set(0, 0.45, 0);
-  const counterTop = createVoxelBox(1.6, 0.08, 2.9, '#f8fafc', { roughness: 0.2 });
+  const counterTop = createVoxelBox(1.6, 0.08, 2.7, '#f8fafc', { roughness: 0.2 });
   counterTop.position.set(0, 0.94, 0);
   const espressoMachine = createVoxelBox(0.65, 0.58, 0.65, '#e2e8f0', { metalness: 0.8, roughness: 0.2 });
-  espressoMachine.position.set(0.1, 1.28, -0.6);
+  espressoMachine.position.set(0.1, 1.28, -0.5);
   kitchenGroup.add(counterBase, counterTop, espressoMachine);
   roomGroup.add(kitchenGroup);
 
@@ -1523,7 +1523,7 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   const coolerGroup = new THREE.Group();
   coolerGroup.name = 'hotspot_cooler';
   coolerGroup.userData = { hotspot: 'cooler' };
-  coolerGroup.position.set(-roomWidth / 2 + 1.1, 0, -0.6);
+  coolerGroup.position.set(-roomWidth / 2 + 1.1, 0, -1.6);
   const coolerBase = createVoxelBox(0.55, 1.1, 0.55, '#ffffff');
   coolerBase.position.set(0, 0.55, 0);
   const jug = createVoxelBox(0.48, 0.65, 0.48, '#0284c7', {
@@ -1536,11 +1536,61 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   coolerGroup.add(coolerBase, jug);
   roomGroup.add(coolerGroup);
 
-  // 5. Copier & Print Station Hotspot
+  // 5. Office Vending Machine Hotspot (Snacks & Chilled Drinks)
+  const vendingGroup = new THREE.Group();
+  vendingGroup.name = 'hotspot_vending';
+  vendingGroup.userData = { hotspot: 'vending' };
+  vendingGroup.position.set(-roomWidth / 2 + 1.2, 0, 1.0);
+
+  const vendBody = createVoxelBox(1.2, 2.6, 1.3, '#18122c', { metalness: 0.3, roughness: 0.7 });
+  vendBody.position.set(0, 1.3, 0);
+
+  const vendMarquee = createVoxelBox(0.08, 0.28, 1.1, '#f43f5e', {
+    emissive: '#f43f5e',
+    emissiveIntensity: 1.3,
+  });
+  vendMarquee.position.set(0.58, 2.42, 0);
+
+  const vendGlass = createVoxelBox(0.04, 1.4, 0.95, '#38bdf8', {
+    emissive: '#7dd3fc',
+    emissiveIntensity: 0.4,
+    transparent: true,
+    opacity: 0.45,
+  });
+  vendGlass.position.set(0.58, 1.42, -0.1);
+
+  const shelfYOffsets = [0.95, 1.38, 1.82];
+  const itemColors = ['#ef4444', '#10b981', '#3b82f6', '#f59e0b', '#ec4899', '#8b5cf6'];
+  shelfYOffsets.forEach((sy, sIdx) => {
+    const shelfPlate = createVoxelBox(0.75, 0.03, 0.9, '#475569');
+    shelfPlate.position.set(0.12, sy, -0.1);
+    vendingGroup.add(shelfPlate);
+
+    for (let c = -0.28; c <= 0.28; c += 0.28) {
+      const color = itemColors[(sIdx * 3 + Math.round((c + 0.28) * 10)) % itemColors.length];
+      const snackBox = createVoxelBox(0.22, 0.3, 0.2, color, { emissive: color, emissiveIntensity: 0.3 });
+      snackBox.position.set(0.26, sy + 0.16, c - 0.1);
+      vendingGroup.add(snackBox);
+    }
+  });
+
+  const keypad = createVoxelBox(0.05, 0.45, 0.2, '#0f172a', { emissive: '#38bdf8', emissiveIntensity: 0.8 });
+  keypad.position.set(0.58, 1.5, 0.45);
+
+  const coinSlot = createVoxelBox(0.06, 0.06, 0.1, '#fbbf24', { emissive: '#fbbf24', emissiveIntensity: 1.2 });
+  coinSlot.position.set(0.58, 1.82, 0.45);
+
+  const chute = createVoxelBox(0.2, 0.38, 0.85, '#090514');
+  chute.position.set(0.48, 0.4, -0.05);
+
+  vendingGroup.add(vendBody, vendMarquee, vendGlass, keypad, coinSlot, chute);
+  roomGroup.add(vendingGroup);
+
+  // 6. Copier & Print Station Hotspot
   const printerGroup = new THREE.Group();
   printerGroup.name = 'hotspot_printer';
   printerGroup.userData = { hotspot: 'printer' };
-  printerGroup.position.set(-roomWidth / 2 + 1.3, 0, 2.4);
+  printerGroup.position.set(-roomWidth / 2 + 1.3, 0, 3.7);
   const printBody = createVoxelBox(1.2, 1.3, 1.1, '#e2e8f0');
   printBody.position.set(0, 0.65, 0);
   const docFeeder = createVoxelBox(0.9, 0.25, 0.8, '#334155');
@@ -1548,11 +1598,11 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   printerGroup.add(printBody, docFeeder);
   roomGroup.add(printerGroup);
 
-  // 6. Gutenberg Bookshelf & Archive Hotspot
+  // 7. Gutenberg Bookshelf & Library Archive Hotspot
   const shelfGroup = new THREE.Group();
   shelfGroup.name = 'hotspot_bookshelf';
   shelfGroup.userData = { hotspot: 'bookshelf' };
-  shelfGroup.position.set(-roomWidth / 2 + 1.2, 0, 4.8);
+  shelfGroup.position.set(-roomWidth / 2 + 1.2, 0, 6.4);
   const shelfFrame = createVoxelBox(1.1, 2.8, 1.8, '#334155');
   shelfFrame.position.set(0, 1.4, 0);
   shelfGroup.add(shelfFrame);
@@ -1566,18 +1616,18 @@ export function buildVoxelRoom(room: CoWorkingRoom, timeOfDay: TimeOfDay): {
   }
   roomGroup.add(shelfGroup);
 
-  // 7. Workstation Cubicle Partition Dividers
+  // 8. Workstation Cubicle Partition Dividers (For 8 Desks: 4 front, 4 back)
   const cubicleGroup = new THREE.Group();
   const dividerColor = theme === 'arcade' ? '#8b5cf6' : theme === 'tea_loft' ? '#78350f' : '#3b82f6';
-  [-2.6, 0.0, 2.6].forEach((cx) => {
+  [-3.0, 0.0, 3.0].forEach((cx) => {
     const divPanel1 = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
     divPanel1.position.set(cx, 0.6, -0.9);
     const divPanel2 = createVoxelBox(0.08, 1.2, 1.4, dividerColor, { roughness: 0.8 });
-    divPanel2.position.set(cx, 0.6, 2.2);
+    divPanel2.position.set(cx, 0.6, 2.3);
     cubicleGroup.add(divPanel1, divPanel2);
   });
-  const spineDivider = createVoxelBox(10.5, 1.1, 0.08, '#1e293b', { roughness: 0.7 });
-  spineDivider.position.set(0, 0.55, 0.65);
+  const spineDivider = createVoxelBox(11.5, 1.1, 0.08, '#1e293b', { roughness: 0.7 });
+  spineDivider.position.set(0, 0.55, 0.7);
   cubicleGroup.add(spineDivider);
   roomGroup.add(cubicleGroup);
 

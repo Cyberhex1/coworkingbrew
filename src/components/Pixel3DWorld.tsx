@@ -19,6 +19,7 @@ import {
 import { soundEngine } from '../utils/audioSynth';
 import { EspressoBarModal } from './EspressoBarModal';
 import { WaterCoolerModal } from './WaterCoolerModal';
+import { VendingMachineModal } from './VendingMachineModal';
 import { CopierHubModal } from './CopierHubModal';
 import { SprintBoardModal } from './SprintBoardModal';
 import { DeskWorkstationOverlay } from './DeskWorkstationOverlay';
@@ -127,6 +128,7 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   // Office Hotspots Interactive Modals State
   const [isEspressoOpen, setIsEspressoOpen] = useState<boolean>(false);
   const [isWaterCoolerOpen, setIsWaterCoolerOpen] = useState<boolean>(false);
+  const [isVendingOpen, setIsVendingOpen] = useState<boolean>(false);
   const [isCopierOpen, setIsCopierOpen] = useState<boolean>(false);
   const [isSprintBoardOpen, setIsSprintBoardOpen] = useState<boolean>(false);
 
@@ -147,16 +149,18 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   const [activeTrigger, setActiveTrigger] = useState<ProximityTrigger | null>(null);
   const activeTriggerRef = useRef<ProximityTrigger | null>(null);
 
-  // 6 Desk placement coordinates in the expanded 20x18 3D room
+  // 8 Desk placement coordinates in the expanded 20x18 3D room
   // Desk 0: Designated Room Study Bot
-  // Desks 1-5: Player Desks
+  // Desks 1-7: Player Desks
   const deskLocations = [
-    { x: -3.8, z: -0.9 },   // Desk 0 (Room Bot)
-    { x: -1.3, z: -0.9 },   // Desk 1
-    { x: 1.3, z: -0.9 },    // Desk 2
-    { x: 3.8, z: -0.9 },    // Desk 3
-    { x: -2.2, z: 2.2 },    // Desk 4
-    { x: 2.2, z: 2.2 },     // Desk 5
+    { x: -4.5, z: -0.9 },   // Desk 0 (Room Bot)
+    { x: -1.5, z: -0.9 },   // Desk 1
+    { x: 1.5, z: -0.9 },    // Desk 2
+    { x: 4.5, z: -0.9 },    // Desk 3
+    { x: -4.5, z: 2.3 },    // Desk 4
+    { x: -1.5, z: 2.3 },    // Desk 5
+    { x: 1.5, z: 2.3 },     // Desk 6
+    { x: 4.5, z: 2.3 },     // Desk 7
   ];
 
   // User assigned desk index (defaults to 1 if not specified)
@@ -201,6 +205,11 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
   const handleWaterCoolerClick = () => {
     soundEngine.playChime('chime');
     setIsWaterCoolerOpen(true);
+  };
+
+  const handleVendingMachineClick = () => {
+    soundEngine.playChime('chime');
+    setIsVendingOpen(true);
   };
 
   const handlePrinterStationClick = () => {
@@ -564,8 +573,8 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleOpenHallway,
         };
       }
-      // 4. Espresso Bar (x: -8.8, z: -4.2)
-      else if (Math.hypot(uX - (-8.8), uZ - (-4.2)) < 3.2) {
+      // 4. Espresso Bar / Coffee Area (x: -8.8, z: -4.6)
+      else if (Math.hypot(uX - (-8.8), uZ - (-4.6)) < 3.2) {
         detectedTrigger = {
           id: 'espresso',
           label: 'Brew Espresso at Coffee Bar',
@@ -573,8 +582,8 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleCoffeeBarClick,
         };
       }
-      // 5. Water Cooler (x: -8.9, z: -0.6)
-      else if (Math.hypot(uX - (-8.9), uZ - (-0.6)) < 3.0) {
+      // 5. Water Cooler (x: -8.9, z: -1.6)
+      else if (Math.hypot(uX - (-8.9), uZ - (-1.6)) < 3.0) {
         detectedTrigger = {
           id: 'cooler',
           label: 'Hydrate at Water Cooler',
@@ -582,8 +591,17 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handleWaterCoolerClick,
         };
       }
-      // 6. Copier / Print Station (x: -8.7, z: 2.4)
-      else if (Math.hypot(uX - (-8.7), uZ - 2.4) < 3.0) {
+      // 6. Vending Machine (x: -8.8, z: 1.0)
+      else if (Math.hypot(uX - (-8.8), uZ - 1.0) < 3.0) {
+        detectedTrigger = {
+          id: 'vending',
+          label: 'Office Vending Machine (Snacks & Drinks)',
+          icon: '🍫',
+          action: handleVendingMachineClick,
+        };
+      }
+      // 7. Copier / Print Station (x: -8.7, z: 3.7)
+      else if (Math.hypot(uX - (-8.7), uZ - 3.7) < 3.0) {
         detectedTrigger = {
           id: 'copier',
           label: 'Print at Copier Hub',
@@ -591,11 +609,11 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           action: handlePrinterStationClick,
         };
       }
-      // 7. Gutenberg Bookshelf & Archive (x: -8.8, z: 4.8)
-      else if (Math.hypot(uX - (-8.8), uZ - 4.8) < 3.2) {
+      // 8. Gutenberg Bookshelf & Library Archive (x: -8.8, z: 6.4)
+      else if (Math.hypot(uX - (-8.8), uZ - 6.4) < 3.2) {
         detectedTrigger = {
           id: 'bookshelf',
-          label: 'Browse Gutenberg Bookshelf',
+          label: 'Browse Gutenberg Bookshelf & Library',
           icon: '📚',
           action: handleBookshelfClick,
         };
@@ -910,6 +928,10 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
           }
           if (cur.userData?.hotspot === 'cooler' || cur.name === 'hotspot_cooler') {
             handleWaterCoolerClick();
+            return;
+          }
+          if (cur.userData?.hotspot === 'vending' || cur.name === 'hotspot_vending') {
+            handleVendingMachineClick();
             return;
           }
           if (cur.userData?.hotspot === 'printer' || cur.name === 'hotspot_printer') {
@@ -1393,6 +1415,17 @@ export const Pixel3DWorld: React.FC<Pixel3DWorldProps> = ({
         onPostMemo={(memoText) => {
           showOfficeNotice('📝 Sticky note placed on the water cooler!');
           onSendReaction('💬');
+        }}
+      />
+
+      <VendingMachineModal
+        isOpen={isVendingOpen}
+        onClose={() => setIsVendingOpen(false)}
+        tickets={tickets}
+        onVendItem={(itemName, focusBonus, cost) => {
+          showOfficeNotice(`🍫 Dispensed ${itemName}! (-${cost} 🎟️, +${focusBonus}m Focus Boost)`);
+          onSendReaction('✨');
+          if (onAddTickets) onAddTickets(-cost);
         }}
       />
 

@@ -388,11 +388,11 @@ export default function App() {
       // Remote peers excluding current user
       const remotePresences = presences.filter((p) => p.userId !== myUserId);
 
-      // Determine available player desk indices (1 to 5)
+      // Determine available player desk indices (1 to 7)
       const occupiedDesks = new Set<number>(remotePresences.map((p) => p.deskIndex));
       let assignedDesk = userDeskIndex;
       if (occupiedDesks.has(assignedDesk) || assignedDesk === 0) {
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 7; i++) {
           if (!occupiedDesks.has(i)) {
             assignedDesk = i;
             break;
@@ -427,7 +427,7 @@ export default function App() {
         };
       });
 
-      // The room consists of ONE designated theme bot (Desk 0) + any real remote coworkers (Desks 1-5)
+      // The room consists of ONE designated theme bot (Desk 0) + any real remote coworkers (Desks 1-7)
       setPeers([themeBot, ...remotePeers]);
     });
 

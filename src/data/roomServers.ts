@@ -3,7 +3,7 @@ import { CoWorkingRoom, RoomPeer, AvatarConfig, DeskConfig } from '../types';
 export interface RoomServerInfo extends CoWorkingRoom {
   serverNumber: 1 | 2 | 3;
   serverName: string;
-  regionLabel: string;
+  regionLabel?: string;
   pingMs: number;
   doorNumber: string;
   ambiance: string;
@@ -112,12 +112,12 @@ export const ROOM_THEMES_INFO: {
   },
 ];
 
-// Generate exactly 3 servers for each room type
+// Generate exactly 3 servers for each room type: Server Silicon, Server Haven, Server Sakura (no regions)
 export const ALL_ROOM_SERVERS: RoomServerInfo[] = ROOM_THEMES_INFO.flatMap((themeInfo) => {
-  const serversConfig: { serverNumber: 1 | 2 | 3; serverName: string; region: string; ping: number }[] = [
-    { serverNumber: 1, serverName: 'Server #1 (US-East: Silicon)', region: 'US East', ping: 18 },
-    { serverNumber: 2, serverName: 'Server #2 (EU-Central: Haven)', region: 'EU Central', ping: 34 },
-    { serverNumber: 3, serverName: 'Server #3 (AP-East: Sakura)', region: 'Asia Tokyo', ping: 48 },
+  const serversConfig: { serverNumber: 1 | 2 | 3; serverName: string; ping: number }[] = [
+    { serverNumber: 1, serverName: 'Server Silicon', ping: 18 },
+    { serverNumber: 2, serverName: 'Server Haven', ping: 34 },
+    { serverNumber: 3, serverName: 'Server Sakura', ping: 48 },
   ];
 
   return serversConfig.map((srv) => ({
@@ -129,10 +129,10 @@ export const ALL_ROOM_SERVERS: RoomServerInfo[] = ROOM_THEMES_INFO.flatMap((them
     timeOfDay: themeInfo.timeOfDay,
     isPrivate: false,
     creatorName: 'CoworkingBrew',
-    maxCapacity: 6, // 1 bot + 5 users
+    maxCapacity: 8, // 8 desks in each room
     serverNumber: srv.serverNumber,
     serverName: srv.serverName,
-    regionLabel: srv.region,
+    regionLabel: '',
     pingMs: srv.ping,
     doorNumber: `${themeInfo.doorBase}${srv.serverNumber}`,
     ambiance: themeInfo.ambiance,
