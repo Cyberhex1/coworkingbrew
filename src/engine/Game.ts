@@ -64,6 +64,7 @@ export type GameEvent =
   | { type: 'stood' }
   | { type: 'proximity'; music: number; cafe: number; fire: number; focus: boolean }
   | { type: 'actorClick'; actorId: string; name: string; kind: ActorInit['kind'] }
+  | { type: 'step' }
   | { type: 'ready' };
 
 const ZONES: { name: string; test: (x: number, z: number) => boolean }[] = [
@@ -121,6 +122,7 @@ export class Game {
   hovered: Interactable | null = null;
   private resizeObs: ResizeObserver;
   private proxTimer = 0;
+  private stepTimer = 0;
   private screenTimer = 0;
   private emitTimers: number[] = [];
   private occupiedDesks = new Set<number>();
@@ -325,6 +327,17 @@ export class Game {
   walkActor(id: string, x: number, z: number) {
     const a = this.actors.get(id);
     if (a) a.path = [{ x, z }];
+  }
+
+  /** Pixel confetti burst over the player (session complete, purchases…). */
+  celebrate() {
+    const p = this.player;
+    if (!p) return;
+    const cols = ['#ffd27a', '#f0a8a8', '#8fe3c4', '#8cb4dc', '#d9734e', '#ffffff'].map((c) => new THREE.Color(c));
+    for (let i = 0; i < 70; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 0.6 + Math.random() * 1.6;
+      this.particles.spawn(p.x, 1.6, p.z, Math.cos(a) * sp, 1.2 + Math.random() * 2.2, Math.sin(a) * sp, 1.2 + Math.random() * 0.8, cols[i % cols.length], 4.5);
+    }
   }
 
   wave() {
@@ -994,6 +1007,12 @@ export class Game {
     this.updateEmitters(dt);
     this.particles.update(dt, this.t);
     for (const fn of this.room.animators) fn(this.t, dt);
+
+    // footsteps
+    if (p?.moving) {
+      this.stepTimer -= dt;
+      if (this.stepTimer <= 0) { this.stepTimer = 0.36; this.emit({ type: 'step' }); }
+    } else this.stepTimer = 0.1;
 
     // zone + proximity events
     if (p) {

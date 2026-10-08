@@ -102,6 +102,9 @@ function handleEvent(g: Game, e: GameEvent) {
     case 'near':
       ui.set({ near: e.target });
       break;
+    case 'step':
+      audio.sfx('step');
+      break;
     case 'zone':
       ui.set({ zone: e.zone });
       break;

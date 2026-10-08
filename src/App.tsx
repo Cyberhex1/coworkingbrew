@@ -122,6 +122,7 @@ function useFocusEngine() {
           audio.chime(s.settings.chime);
           if (res.mode === 'focus') {
             g?.say('me', 'Session complete! 🎉', 5000);
+            g?.celebrate();
             g?.wave();
             toast(`Focus session done — time for a break!`, 'success');
             notify('Focus session complete 🎉', `+${res.tickets} tickets. Take a break — grab a coffee or play the arcade.`);
