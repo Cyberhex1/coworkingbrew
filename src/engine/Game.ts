@@ -315,6 +315,12 @@ export class Game {
     a.bubbleUntil = this.t + ms / 1000;
   }
 
+  /** Straight-line walk for scripted NPC moments (e.g. the barista brewing). */
+  walkActor(id: string, x: number, z: number) {
+    const a = this.actors.get(id);
+    if (a) a.path = [{ x, z }];
+  }
+
   wave() {
     if (!this.player || this.player.seat) return;
     this.player.rig.state = 'wave';

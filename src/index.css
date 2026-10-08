@@ -108,6 +108,7 @@ body {
 }
 @keyframes bubble-pop { from { transform: scale(0.6); opacity: 0; } }
 
+@layer components {
 /* ------------------------------------------------------------------ pixel UI kit */
 .px-panel {
   --notch: 4px;
@@ -231,6 +232,8 @@ input[type='range'].px-range::-moz-range-thumb { width: 10px; height: 14px; back
 .px-bob { animation: px-bob 1.2s steps(2) infinite; }
 @keyframes px-in { from { transform: translateY(12px); opacity: 0; } }
 .px-in { animation: px-in 180ms steps(4) both; }
+
+}
 
 @media (prefers-reduced-motion: reduce) {
   .px-bob, .px-blink, .px-in, .cb-bubble { animation: none; }

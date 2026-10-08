@@ -17,6 +17,14 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      // Dev stand-in for the Cloudflare Pages Function at functions/api/book/[id].ts
+      proxy: {
+        '/api/book': {
+          target: 'https://www.gutenberg.org',
+          changeOrigin: true,
+          rewrite: (p: string) => p.replace(/^\/api\/book\/(\d+).*$/, '/cache/epub/$1/pg$1.txt'),
+        },
+      },
     },
   };
 });

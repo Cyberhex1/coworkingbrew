@@ -866,7 +866,7 @@ export function buildRoom(theme: RoomTheme): RoomBuild {
   return {
     group, nav, interactables, desks, walls, emitters, animators,
     lights: { hemi, sun, points },
-    spawn: { x: 1.4, z: 13.7, facing: FACE.E },
+    spawn: { x: 2.7, z: 13.4, facing: FACE.E },
     barista: { x: 2.6, z: 1.5, facing: FACE.S },
     whiteboardTex: { canvas: whiteboardCanvas, tex: whiteboardTexture3 },
     windows,
