@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { WorldView } from './ui/WorldView';
 import { RoomCard, TopRight, FocusWidget, Prompt, Dock, CameraControls, Toasts, Chat, goToMyDesk, fmt } from './ui/HUD';
 import { useApp } from './state/store';
@@ -8,36 +8,40 @@ import { game } from './engine/gameRef';
 import { initNet } from './net/session';
 import { THEME_BY_ID } from './engine/themes';
 import { toast } from './state/ui';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 
-const panels: Record<PanelId, React.LazyExoticComponent<React.ComponentType>> = {
-  brewos: lazy(() => import('./ui/os/BrewOS')),
-  coffee: lazy(() => import('./ui/panels/CoffeePanel')),
-  vending: lazy(() => import('./ui/panels/VendingPanel')),
-  cooler: lazy(() => import('./ui/panels/CoolerPanel')),
-  whiteboard: lazy(() => import('./ui/panels/WhiteboardPanel')),
-  copier: lazy(() => import('./ui/panels/CopierPanel')),
-  library: lazy(() => import('./ui/panels/LibraryPanel')),
-  record: lazy(() => import('./ui/panels/RecordPanel')),
-  arcade: lazy(() => import('./ui/panels/ArcadePanel')),
-  wardrobe: lazy(() => import('./ui/panels/WardrobePanel')),
-  pet: lazy(() => import('./ui/panels/PetPanel')),
-  rooms: lazy(() => import('./ui/panels/RoomsPanel')),
-  shop: lazy(() => import('./ui/panels/ShopPanel')),
-  stats: lazy(() => import('./ui/panels/StatsPanel')),
-  settings: lazy(() => import('./ui/panels/SettingsPanel')),
-  account: lazy(() => import('./ui/panels/AccountPanel')),
-  tasks: lazy(() => import('./ui/panels/TasksPanel')),
-  person: lazy(() => import('./ui/panels/PersonPanel')),
-  help: lazy(() => import('./ui/panels/HelpPanel')),
-  messages: lazy(() => import('./ui/panels/MessagesPanel')),
+type Loader = () => Promise<{ default: React.ComponentType }>;
+const panels: Record<PanelId, Loader> = {
+  brewos: () => import('./ui/os/BrewOS'),
+  coffee: () => import('./ui/panels/CoffeePanel'),
+  vending: () => import('./ui/panels/VendingPanel'),
+  cooler: () => import('./ui/panels/CoolerPanel'),
+  whiteboard: () => import('./ui/panels/WhiteboardPanel'),
+  copier: () => import('./ui/panels/CopierPanel'),
+  library: () => import('./ui/panels/LibraryPanel'),
+  record: () => import('./ui/panels/RecordPanel'),
+  arcade: () => import('./ui/panels/ArcadePanel'),
+  wardrobe: () => import('./ui/panels/WardrobePanel'),
+  pet: () => import('./ui/panels/PetPanel'),
+  rooms: () => import('./ui/panels/RoomsPanel'),
+  shop: () => import('./ui/panels/ShopPanel'),
+  stats: () => import('./ui/panels/StatsPanel'),
+  settings: () => import('./ui/panels/SettingsPanel'),
+  account: () => import('./ui/panels/AccountPanel'),
+  tasks: () => import('./ui/panels/TasksPanel'),
+  person: () => import('./ui/panels/PersonPanel'),
+  help: () => import('./ui/panels/HelpPanel'),
+  messages: () => import('./ui/panels/MessagesPanel'),
 };
 
 const Onboarding = lazy(() => import('./ui/Onboarding'));
 
+if (import.meta.env.DEV || location.search.includes('debug')) (window as unknown as { cb: unknown }).cb = { useApp, useUI, game };
+
 export default function App() {
   const panel = useUI((s) => s.panel);
   const onboarded = useApp((s) => s.onboarded);
-  const Panel = panel ? panels[panel] : null;
+  const Panel = usePanel(panel);
 
   useFocusEngine();
   useAudioSync();
@@ -70,10 +74,10 @@ export default function App() {
         </div>
       </div>
 
-      {Panel && (
-        <Suspense fallback={<div className="fixed inset-0 z-40 grid place-items-center"><div className="px-panel px-4 py-2 px-blink">Loading…</div></div>}>
-          <Panel key={panel} />
-        </Suspense>
+      {panel && (
+        <ErrorBoundary key={panel} onClose={() => useUI.getState().closePanel()}>
+          {Panel ? <Panel /> : <div className="fixed inset-0 z-40 grid place-items-center pointer-events-none"><div className="px-panel px-4 py-2 px-blink">Loading…</div></div>}
+        </ErrorBoundary>
       )}
 
       {!onboarded && (
@@ -83,6 +87,22 @@ export default function App() {
       )}
     </div>
   );
+}
+
+// ---------------------------------------------------------------- panel loader
+// Plain effect-based code splitting for panels (each panel is its own chunk).
+const loaded = new Map<PanelId, React.ComponentType>();
+function usePanel(panel: PanelId | null) {
+  const [, force] = useState(0);
+  useEffect(() => {
+    if (!panel || loaded.has(panel)) return;
+    let alive = true;
+    panels[panel]()
+      .then((m) => { loaded.set(panel, m.default); if (alive) force((n) => n + 1); })
+      .catch((e) => { console.error(e); toast('Could not open that — check your connection', 'error'); useUI.getState().closePanel(); });
+    return () => { alive = false; };
+  }, [panel]);
+  return panel ? loaded.get(panel) ?? null : null;
 }
 
 // ---------------------------------------------------------------- focus timer engine
