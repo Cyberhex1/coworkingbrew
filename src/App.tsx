@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { WorldView } from './ui/WorldView';
-import { RoomCard, TopRight, FocusWidget, Prompt, Dock, CameraControls, Toasts, Chat, goToMyDesk, fmt } from './ui/HUD';
+import { RoomCard, TopRight, FocusWidget, Prompt, Dock, CameraControls, Toasts, Chat, goToMyDesk, startFocusAndGo, fmt } from './ui/HUD';
 import { useApp } from './state/store';
 import { useUI, type PanelId } from './state/ui';
 import { audio } from './audio/engine';
@@ -211,7 +211,7 @@ function useShortcuts() {
       else if (k === 'f') {
         const s = useApp.getState();
         if (s.focus.running) s.pauseFocus();
-        else s.startFocus();
+        else startFocusAndGo();
       } else if (k === '?' || k === 'h') ui.openPanel('help');
       else if (k === 'e' && ui.seatId?.startsWith('desk-')) ui.openPanel('brewos');
     };

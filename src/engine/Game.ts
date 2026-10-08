@@ -116,6 +116,7 @@ export class Game {
   raf = 0;
   disposed = false;
   npcsEnabled = true;
+  private npcsSeeded = false;
   focus = { running: false, progress: 0, label: '' };
   hovered: Interactable | null = null;
   private resizeObs: ResizeObserver;
@@ -244,6 +245,7 @@ export class Game {
   setPlayer(init: Omit<ActorInit, 'kind' | 'id'> & { id?: string }) {
     const id = init.id ?? 'me';
     let a = this.player;
+    const prevDesk = a?.deskIndex;
     const key = JSON.stringify(init.avatar);
     if (!a) {
       a = this.makeActor({ ...init, id, kind: 'player' });
@@ -256,8 +258,12 @@ export class Game {
       a.deskIndex = init.deskIndex;
       this.renderLabel(a);
     }
+    const deskChanged = prevDesk !== init.deskIndex || !this.npcsSeeded;
     a.deskIndex = init.deskIndex;
-    this.refreshNpcs();
+    if (deskChanged) {
+      this.npcsSeeded = true;
+      this.refreshNpcs();
+    }
   }
 
   private rebuildRig(a: Actor, avatar: AvatarConfig) {

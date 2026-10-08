@@ -178,7 +178,8 @@ export default function BrewOS() {
                 </div>
                 {focus.running && <span className="px-chip bg-[#fff2c4] hidden sm:inline">{focus.mode === 'focus' ? '🍅 focusing' : '☕ break'}</span>}
                 <span className="px-chip flex items-center gap-1"><PixelIcon name="ticket" size={12} />{tickets}</span>
-                <span className="px-chip tabular-nums">{new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+                <button className="sm:hidden px-btn px-btn-sm" onClick={exit} aria-label="Close BrewOS"><PixelIcon name="close" size={12} /></button>
+                <span className="px-chip tabular-nums hidden sm:inline">{new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
               </footer>
             </>
           )}
@@ -192,8 +193,6 @@ export default function BrewOS() {
             <span className="w-2.5 h-2.5 bg-[#62e356] border border-[var(--color-ink)]" title="Power" />
           </div>
         </div>
-        {/* mobile close */}
-        <button className="sm:hidden absolute right-2 top-2 z-[1000] px-btn px-btn-sm" onClick={exit} aria-label="Close BrewOS"><PixelIcon name="close" size={14} /></button>
       </div>
     </div>
   );

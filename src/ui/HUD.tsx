@@ -36,16 +36,16 @@ export function RoomCard() {
       onClick={() => { audio.sfx('open'); useUI.getState().openPanel('rooms'); }}
       title="Switch rooms"
     >
-      <div className="px-panel px-3 py-2 flex items-center gap-2.5 hover:bg-[#fff8e8]">
+      <div className="px-panel px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2 sm:gap-2.5 hover:bg-[#fff8e8]">
         <PixelIcon name={t.timeOfDay === 'night' ? 'moon' : t.timeOfDay === 'rainy' ? 'water' : 'sun'} size={28} />
         <div className="leading-tight">
-          <div className="font-semibold text-[15px]">{t.short}</div>
-          <div className="text-[11px] text-[var(--color-cocoa)] flex items-center gap-1.5">
+          <div className="font-semibold text-[13px] sm:text-[15px] whitespace-nowrap">{t.short}</div>
+          <div className="text-[11px] text-[var(--color-cocoa)] flex items-center gap-1.5 whitespace-nowrap">
             <span>{sv}</span>
-            <span>·</span>
-            <span>{zone || 'Entrance'}</span>
-            <span>·</span>
-            <span>{new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+            <span className="hidden sm:inline">·</span>
+            <span className="hidden sm:inline">{zone || 'Entrance'}</span>
+            <span className="hidden sm:inline">·</span>
+            <span className="hidden sm:inline">{new Date(now).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
           </div>
         </div>
         {online.signedIn && (
@@ -77,7 +77,7 @@ export function TopRight() {
   }, [tickets]);
   const open = (p: PanelId) => { audio.sfx('open'); useUI.getState().openPanel(p); };
   return (
-    <div className="flex items-center gap-2 pointer-events-auto">
+    <div className="flex items-center gap-1.5 sm:gap-2 pointer-events-auto">
       <button className="px-btn" onClick={() => open('shop')} title="Ticket shop" style={bump ? { transform: 'translateY(-3px)' } : undefined}>
         <PixelIcon name="ticket" size={18} />
         <span className="tabular-nums">{tickets}</span>
@@ -110,8 +110,6 @@ export function FocusWidget() {
   const focus = useApp((s) => s.focus);
   const tasks = useApp((s) => s.tasks);
   const settings = useApp((s) => s.settings);
-  const deskIndex = useApp((s) => s.deskIndex);
-  const sittingDesk = useUI((s) => s.sittingDesk);
   const now = useNow(250);
   const total = (focus.mode === 'focus' ? settings.focusMin : focus.mode === 'short' ? settings.shortMin : settings.longMin) * 60_000;
   const remaining = focus.running && focus.endsAt ? focus.endsAt - now : focus.remainingMs;
@@ -120,24 +118,9 @@ export function FocusWidget() {
   const app = useApp.getState();
   const isBreak = focus.mode !== 'focus';
   const label = focus.mode === 'focus' ? 'Focus' : focus.mode === 'short' ? 'Short break' : 'Long break';
-  const atDesk = sittingDesk != null && sittingDesk === deskIndex;
   const started = focus.running || focus.endsAt !== null || remaining < total - 500;
 
-  const start = () => {
-    audio.unlock();
-    audio.sfx('success');
-    app.startFocus();
-    if (!isBreak && !atDesk) {
-      const g = game();
-      if (g) {
-        if (deskIndex != null) g.goToDesk(deskIndex);
-        else {
-          const free = [1, 2, 3, 4, 5, 6, 7].find((i) => !g.deskOwner(i));
-          if (free != null) g.goToDesk(free);
-        }
-      }
-    }
-  };
+  const start = () => startFocusAndGo();
 
   return (
     <div className="px-shadow pointer-events-auto">
@@ -231,6 +214,17 @@ const DOCK: { id: string; icon: string; label: string; key?: string }[] = [
   { id: 'rooms', icon: 'door', label: 'Rooms' },
   { id: 'help', icon: 'help', label: 'Help' },
 ];
+
+/** Start (or resume) the timer and, for focus sessions, walk to your desk. */
+export function startFocusAndGo() {
+  const app = useApp.getState();
+  void audio.unlock();
+  audio.sfx('success');
+  app.startFocus();
+  const ui = useUI.getState();
+  const atDesk = ui.sittingDesk != null && ui.sittingDesk === app.deskIndex;
+  if (app.focus.mode === 'focus' && !atDesk) goToMyDesk();
+}
 
 export function goToMyDesk() {
   const g = game();
